@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Симуляция
+sim_build/
+results.xml
+coverage.dat
+*.vcd
+*.fst
+*.log
+
+# САПР (окончательный набор — после выбора инструмента)
+.Xil/
+*.jou
+*.str
+*.runs/
+*.cache/
+*.hw/
+db/
+incremental_db/
+output_files/
+
+# Данные и артефакты
+data/*.tmp
+docs/results/*.png.tmp
+
+# ОС / редакторы
+.DS_Store
+.idea/
+.vscode/

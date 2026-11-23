@@ -32,24 +32,77 @@ module sha256_core #(
   localparam logic [2:0] S_COMPRESS = 3'd3;
   localparam logic [2:0] S_IDLE     = 3'd4;
 
-  localparam logic [31:0] K[0:63] = '{
-      32'h428a2f98, 32'h71374491, 32'hb5c0fbcf, 32'he9b5dba5,
-      32'h3956c25b, 32'h59f111f1, 32'h923f82a4, 32'hab1c5ed5,
-      32'hd807aa98, 32'h12835b01, 32'h243185be, 32'h550c7dc3,
-      32'h72be5d74, 32'h80deb1fe, 32'h9bdc06a7, 32'hc19bf174,
-      32'he49b69c1, 32'hefbe4786, 32'h0fc19dc6, 32'h240ca1cc,
-      32'h2de92c6f, 32'h4a7484aa, 32'h5cb0a9dc, 32'h76f988da,
-      32'h983e5152, 32'ha831c66d, 32'hb00327c8, 32'hbf597fc7,
-      32'hc6e00bf3, 32'hd5a79147, 32'h06ca6351, 32'h14292967,
-      32'h27b70a85, 32'h2e1b2138, 32'h4d2c6dfc, 32'h53380d13,
-      32'h650a7354, 32'h766a0abb, 32'h81c2c92e, 32'h92722c85,
-      32'ha2bfe8a1, 32'ha81a664b, 32'hc24b8b70, 32'hc76c51a3,
-      32'hd192e819, 32'hd6990624, 32'hf40e3585, 32'h106aa070,
-      32'h19a4c116, 32'h1e376c08, 32'h2748774c, 32'h34b0bcb5,
-      32'h391c0cb3, 32'h4ed8aa4a, 32'h5b9cca4f, 32'h682e6ff3,
-      32'h748f82ee, 32'h78a5636f, 32'h84c87814, 32'h8cc70208,
-      32'h90befffa, 32'ha4506ceb, 32'hbef9a3f7, 32'hc67178f2
-  };
+  // Round constants are exposed through a function rather than an unpacked
+  // localparam array: both Yosys and Verilator elaborate this form without
+  // vendor-specific attributes.
+  function automatic logic [31:0] k_const(input logic [5:0] i);
+    case (i)
+      6'd0: k_const = 32'h428a2f98;
+      6'd1: k_const = 32'h71374491;
+      6'd2: k_const = 32'hb5c0fbcf;
+      6'd3: k_const = 32'he9b5dba5;
+      6'd4: k_const = 32'h3956c25b;
+      6'd5: k_const = 32'h59f111f1;
+      6'd6: k_const = 32'h923f82a4;
+      6'd7: k_const = 32'hab1c5ed5;
+      6'd8: k_const = 32'hd807aa98;
+      6'd9: k_const = 32'h12835b01;
+      6'd10: k_const = 32'h243185be;
+      6'd11: k_const = 32'h550c7dc3;
+      6'd12: k_const = 32'h72be5d74;
+      6'd13: k_const = 32'h80deb1fe;
+      6'd14: k_const = 32'h9bdc06a7;
+      6'd15: k_const = 32'hc19bf174;
+      6'd16: k_const = 32'he49b69c1;
+      6'd17: k_const = 32'hefbe4786;
+      6'd18: k_const = 32'h0fc19dc6;
+      6'd19: k_const = 32'h240ca1cc;
+      6'd20: k_const = 32'h2de92c6f;
+      6'd21: k_const = 32'h4a7484aa;
+      6'd22: k_const = 32'h5cb0a9dc;
+      6'd23: k_const = 32'h76f988da;
+      6'd24: k_const = 32'h983e5152;
+      6'd25: k_const = 32'ha831c66d;
+      6'd26: k_const = 32'hb00327c8;
+      6'd27: k_const = 32'hbf597fc7;
+      6'd28: k_const = 32'hc6e00bf3;
+      6'd29: k_const = 32'hd5a79147;
+      6'd30: k_const = 32'h06ca6351;
+      6'd31: k_const = 32'h14292967;
+      6'd32: k_const = 32'h27b70a85;
+      6'd33: k_const = 32'h2e1b2138;
+      6'd34: k_const = 32'h4d2c6dfc;
+      6'd35: k_const = 32'h53380d13;
+      6'd36: k_const = 32'h650a7354;
+      6'd37: k_const = 32'h766a0abb;
+      6'd38: k_const = 32'h81c2c92e;
+      6'd39: k_const = 32'h92722c85;
+      6'd40: k_const = 32'ha2bfe8a1;
+      6'd41: k_const = 32'ha81a664b;
+      6'd42: k_const = 32'hc24b8b70;
+      6'd43: k_const = 32'hc76c51a3;
+      6'd44: k_const = 32'hd192e819;
+      6'd45: k_const = 32'hd6990624;
+      6'd46: k_const = 32'hf40e3585;
+      6'd47: k_const = 32'h106aa070;
+      6'd48: k_const = 32'h19a4c116;
+      6'd49: k_const = 32'h1e376c08;
+      6'd50: k_const = 32'h2748774c;
+      6'd51: k_const = 32'h34b0bcb5;
+      6'd52: k_const = 32'h391c0cb3;
+      6'd53: k_const = 32'h4ed8aa4a;
+      6'd54: k_const = 32'h5b9cca4f;
+      6'd55: k_const = 32'h682e6ff3;
+      6'd56: k_const = 32'h748f82ee;
+      6'd57: k_const = 32'h78a5636f;
+      6'd58: k_const = 32'h84c87814;
+      6'd59: k_const = 32'h8cc70208;
+      6'd60: k_const = 32'h90befffa;
+      6'd61: k_const = 32'ha4506ceb;
+      6'd62: k_const = 32'hbef9a3f7;
+      default: k_const = 32'hc67178f2;
+    endcase
+  endfunction
 
   logic [31:0] hash_q[0:7];
   logic [7:0]  block_q[0:63];
@@ -85,35 +138,35 @@ module sha256_core #(
   assign tag   = tag_q;
 
   function automatic logic [31:0] rotr32(input logic [31:0] x, input int unsigned n);
-    return (x >> n) | (x << (32 - n));
+    rotr32 = (x >> n) | (x << (32 - n));
   endfunction
 
   function automatic logic [31:0] big_sigma0(input logic [31:0] x);
-    return rotr32(x, 2) ^ rotr32(x, 13) ^ rotr32(x, 22);
+    big_sigma0 = rotr32(x, 2) ^ rotr32(x, 13) ^ rotr32(x, 22);
   endfunction
 
   function automatic logic [31:0] big_sigma1(input logic [31:0] x);
-    return rotr32(x, 6) ^ rotr32(x, 11) ^ rotr32(x, 25);
+    big_sigma1 = rotr32(x, 6) ^ rotr32(x, 11) ^ rotr32(x, 25);
   endfunction
 
   function automatic logic [31:0] small_sigma0(input logic [31:0] x);
-    return rotr32(x, 7) ^ rotr32(x, 18) ^ (x >> 3);
+    small_sigma0 = rotr32(x, 7) ^ rotr32(x, 18) ^ (x >> 3);
   endfunction
 
   function automatic logic [31:0] small_sigma1(input logic [31:0] x);
-    return rotr32(x, 17) ^ rotr32(x, 19) ^ (x >> 10);
+    small_sigma1 = rotr32(x, 17) ^ rotr32(x, 19) ^ (x >> 10);
   endfunction
 
   function automatic logic [31:0] ch(input logic [31:0] x,
                                      input logic [31:0] y,
                                      input logic [31:0] z);
-    return (x & y) ^ (~x & z);
+    ch = (x & y) ^ (~x & z);
   endfunction
 
   function automatic logic [31:0] maj(input logic [31:0] x,
                                       input logic [31:0] y,
                                       input logic [31:0] z);
-    return (x & y) ^ (x & z) ^ (y & z);
+    maj = (x & y) ^ (x & z) ^ (y & z);
   endfunction
 
   // Working variables for one compression round.
@@ -270,7 +323,7 @@ module sha256_core #(
           end
 
           t1 = h_q + big_sigma1(e_q) + ch(e_q, f_q, g_q) +
-               K[round_q] + w_val;
+               k_const(round_q) + w_val;
           t2 = big_sigma0(a_q) + maj(a_q, b_q, c_q);
 
           na = t1 + t2;

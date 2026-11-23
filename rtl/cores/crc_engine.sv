@@ -36,7 +36,7 @@ module crc_engine #(
     for (int unsigned i = 0; i < 8; i++) begin
       r[i] = value[7-i];
     end
-    return r;
+    reverse8 = r;
   endfunction
 
   function automatic logic [CRC_WIDTH-1:0] reverse_crc(
@@ -46,7 +46,7 @@ module crc_engine #(
     for (int unsigned i = 0; i < CRC_WIDTH; i++) begin
       r[i] = value[CRC_WIDTH-1-i];
     end
-    return r;
+    reverse_crc = r;
   endfunction
 
   function automatic logic [CRC_WIDTH-1:0] update_byte(
@@ -62,7 +62,7 @@ module crc_engine #(
         r = r << 1;
       end
     end
-    return r;
+    update_byte = r;
   endfunction
 
   always_comb begin

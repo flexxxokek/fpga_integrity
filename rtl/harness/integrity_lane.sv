@@ -81,7 +81,10 @@ module integrity_lane #(
   logic       out_corrupt;
   logic [2:0] out_weight;
   logic       pkt_corrupt_q;
+  logic       tag_corrupt_q;
+  logic [2:0] injected_weight_q;
   logic       tag_phase_q;
+  logic [2:0] push_weight;
 
   logic       tx_busy;
   logic       rx_busy;
@@ -121,7 +124,9 @@ module integrity_lane #(
       .s_axis_tdata(tx_tdata), .s_axis_tkeep(tx_tkeep),
       .s_axis_tvalid(tx_tvalid), .s_axis_tready(tx_tready),
       .s_axis_tlast(tx_tlast),
-      .enable(!tag_phase_q),
+      // Mode 9 corrupts the trailing tag instead of the payload; every
+      // other mode is disabled while tag beats cross the link.
+      .enable((MODE == 9) ? tag_phase_q : !tag_phase_q),
       .m_axis_tdata(link_tdata), .m_axis_tkeep(link_tkeep),
       .m_axis_tvalid(link_tvalid), .m_axis_tready(link_tready),
       .m_axis_tlast(link_tlast), .corrupt(link_corrupt),
@@ -158,6 +163,11 @@ module integrity_lane #(
 
   assign out_corrupt = corrupt_fifo[fifo_rd];
   assign out_weight  = weight_fifo[fifo_rd];
+  // Weight presented with the packet: prefer a corruption arriving on the
+  // closing beat (single-beat packets / mode 9) over the latched one.
+  assign push_weight = (link_tvalid && link_tready && link_corrupt &&
+                        !pkt_corrupt_q && !tag_corrupt_q)
+                           ? link_flip_count : injected_weight_q;
 
   always_ff @(posedge clk) begin
     if (rst) begin
@@ -178,6 +188,8 @@ module integrity_lane #(
       fifo_rd         <= 2'd0;
       fifo_count      <= 3'd0;
       pkt_corrupt_q   <= 1'b0;
+      tag_corrupt_q   <= 1'b0;
+      injected_weight_q <= 3'd0;
       tag_phase_q     <= 1'b0;
     end else begin
       if (lane_busy) begin
@@ -188,18 +200,37 @@ module integrity_lane #(
       if (tx_tvalid && tx_tready && tx_tlast) begin
         tag_phase_q <= ~tag_phase_q;
       end
-      // Track whether this packet was corrupted on the TX -> RX link and push
-      // one flag per packet when its trailing tag has been accepted.
-      if (link_tvalid && link_tready && link_tlast && !tag_phase_q) begin
-        corrupt_fifo[fifo_wr] <= pkt_corrupt_q || link_corrupt;
-        weight_fifo[fifo_wr]  <= link_flip_count;
-        fifo_wr <= fifo_wr + 2'd1;
-        if (fifo_count != 3'd4) begin
-          fifo_count <= fifo_count + 3'd1;
+      // Track whether this packet was corrupted on the TX -> RX link.  The
+      // packet is closed on the *tag* tlast, not the payload tlast, so that
+      // mode 9 (tag corruption) is accounted for as well.  The weight is
+      // captured at the first beat that is actually corrupted; reading it at
+      // the closing beat would report the injector's state for that beat.
+      if (link_tvalid && link_tready && link_corrupt &&
+          !pkt_corrupt_q && !tag_corrupt_q) begin
+        injected_weight_q <= link_flip_count;
+      end
+
+      if (link_tvalid && link_tready && link_tlast) begin
+        if (tag_phase_q) begin
+          corrupt_fifo[fifo_wr] <= pkt_corrupt_q || tag_corrupt_q ||
+                                   link_corrupt;
+          weight_fifo[fifo_wr]  <= push_weight;
+          fifo_wr <= fifo_wr + 2'd1;
+          if (fifo_count != 3'd4) begin
+            fifo_count <= fifo_count + 3'd1;
+          end
+          pkt_corrupt_q     <= 1'b0;
+          tag_corrupt_q     <= 1'b0;
+          injected_weight_q <= 3'd0;
+        end else begin
+          pkt_corrupt_q <= pkt_corrupt_q || link_corrupt;
         end
-        pkt_corrupt_q <= 1'b0;
       end else if (link_tvalid && link_tready && link_corrupt) begin
-        pkt_corrupt_q <= 1'b1;
+        if (tag_phase_q) begin
+          tag_corrupt_q <= 1'b1;
+        end else begin
+          pkt_corrupt_q <= 1'b1;
+        end
       end
 
       if (out_tvalid) begin

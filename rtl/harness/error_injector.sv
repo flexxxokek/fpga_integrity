@@ -5,12 +5,17 @@
 //   0 clean, 1 single-bit, 2 burst of BURST_LEN bits, 3 byte swap,
 //   4 zero the first payload byte, 5 Gilbert-Elliott burst channel,
 //   6 zero all payload bytes, 7 invert all payload bits,
-//   8 randomise all payload bytes.
+//   8 randomise all payload bytes, 9 flip a bit of the trailing tag.
 //
 // MODE 5 uses the two-state Markov model of Gilbert (1960) and Elliott
 // (1963): p_gb/p_bg are Q16 transition probabilities (mean gap = 1/p_gb,
 // mean burst = 1/p_bg bits) and h_q16 is the bit error probability in the
-// bad state.  See docs/false_rate.md for the citations.
+// bad state.  Unlike the other modes, mode 5 advances the channel on every
+// payload beat (the whole payload is a codeword), so its per-packet error
+// statistics are comparable with the model in scripts/false_rate_suite.py.
+// `flip_count` reports the number of payload bits actually changed on the
+// current beat (saturated at 4), not the size of an internal mask.
+// See docs/false_rate.md for the citations.
 module error_injector #(
     parameter int DATA_WIDTH = 32,
     parameter int MODE = 0,
@@ -46,6 +51,7 @@ module error_injector #(
   logic [DATA_WIDTH-1:0]   mask;
   logic [DATA_WIDTH-1:0]   swapped;
   logic [DATA_WIDTH-1:0]   swap_bytes;
+  logic [DATA_WIDTH-1:0]   actual_tdata;
   logic                    inject_now;
   logic                    beat_has_bytes;
   logic [31:0]             bit_sel;
@@ -105,8 +111,10 @@ module error_injector #(
 
   always_comb begin
     beat_has_bytes = (s_axis_tkeep != '0);
-    inject_now = (MODE != 0) && enable && s_axis_tvalid && !injected_q &&
-                 beat_has_bytes;
+    // Mode 5 is a channel model: it must consume every payload beat, not
+    // just the first one, otherwise the tested codeword is only one beat.
+    inject_now = (MODE != 0) && enable && s_axis_tvalid && beat_has_bytes &&
+                 ((MODE == 5) || !injected_q);
     mask = '0;
     swapped = s_axis_tdata;
     ge_state_next = ge_state_q;
@@ -115,8 +123,9 @@ module error_injector #(
         mask[(bit_sel + j) % DATA_WIDTH] = 1'b1;
       end
     end else if (MODE == 5) begin
-      // Gilbert-Elliott channel: walk the bits of the first beat, keeping
-      // the Markov state across packets.  0 = good (gap), 1 = bad (burst).
+      // Gilbert-Elliott channel: walk every valid bit of the current beat,
+      // keeping the Markov state across beats and packets.
+      // 0 = good (gap), 1 = bad (burst).
       ge_state = ge_state_q;
       for (int unsigned i = 0; i < DATA_WIDTH; i++) begin
         if (i < valid_bits) begin
@@ -168,10 +177,21 @@ module error_injector #(
       swapped = s_axis_tdata ^ mask;
     end
 
+    // The weight is the number of bits that actually reach the link,
+    // restricted to bytes covered by tkeep.  Counting `mask` directly was
+    // wrong for byte swap (mode 3), zero byte (mode 4) and for the GE gap
+    // beats where a mask is computed but never applied.
+    actual_tdata = inject_now ? swapped : s_axis_tdata;
     flip_count = 3'd0;
-    for (int unsigned i = 0; i < DATA_WIDTH; i++) begin
-      if (mask[i] && flip_count != 3'd4) begin
-        flip_count = flip_count + 3'd1;
+    for (int unsigned i = 0; i < BEAT_BYTES; i++) begin
+      if (s_axis_tkeep[i]) begin
+        for (int unsigned k = 0; k < 8; k++) begin
+          if (actual_tdata[i*8 + k] ^ s_axis_tdata[i*8 + k]) begin
+            if (flip_count != 3'd4) begin
+              flip_count = flip_count + 3'd1;
+            end
+          end
+        end
       end
     end
   end
@@ -180,7 +200,7 @@ module error_injector #(
   assign m_axis_tvalid = s_axis_tvalid;
   assign m_axis_tkeep  = s_axis_tkeep;
   assign m_axis_tlast  = s_axis_tlast;
-  assign m_axis_tdata  = inject_now ? swapped : s_axis_tdata;
+  assign m_axis_tdata  = actual_tdata;
   // A Gilbert-Elliott gap may produce an empty mask: that packet is clean.
   assign corrupt       = corrupt_q || (inject_now && (mask != '0));
 

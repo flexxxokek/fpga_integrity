@@ -39,9 +39,10 @@ flowchart TB
 | `crc_engine` | `CRC_WIDTH`, `POLY`, `INIT`, `REFIN`, `REFOUT`, `XOROUT` | все CRC из спецификации |
 | `sha256_core` | — | SHA-256 (расширенный трек) |
 
-Параллельные CRC-уравнения (развёртывание LFSR на `DATA_WIDTH` бит)
-генерируются скриптом `scripts/gen_crc.py`; сгенерированные файлы
-хранятся в репозитории и помечаются как generated.
+CRC реализован одним последовательным MSB-first LFSR-движком; для
+REFIN/REFOUT входные байты и итоговый остаток переворачиваются. Отдельного
+скрипта генерации параллельных уравнений нет — `scripts/gen_crc.py` был
+удалён как неиспользуемый: в репозитории не осталось мёртвых скриптов.
 
 ## 3. Обёртки (`rtl/wrappers`)
 
@@ -82,4 +83,7 @@ boards/<board_name>/
 
 - `collect.py` — приём отчётов по UART (pyserial), сохранение в `data/*.csv`.
 - `parse_reports.py` — извлечение LUT/FF/Fmax из отчётов САПР.
-- `analyze.py` — таблицы и графики (pandas + matplotlib), экспорт в `docs/results/`.
+- `analyze.py` — таблицы и графики (только stdlib + опциональный matplotlib),
+  экспорт в `docs/results/`.
+- `synth.py` / `synth_table.py` — синтез Yosys и таблица статических метрик.
+- `cov_report.py` — слияние покрытия всех конфигураций.

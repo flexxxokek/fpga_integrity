@@ -199,7 +199,7 @@ def write_csv(path: Path, outcomes: dict[str, dict[str, int]],
     meta = meta or {}
     rows = 0
     with path.open("a" if append else "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
         if not append:
             writer.writeheader()
         for algo, stats in outcomes.items():

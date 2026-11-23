@@ -7,9 +7,11 @@
 
 **Стек:** SystemVerilog · cocotb (Python) · Verilator · Python (анализ данных)
 
-**Статус:** этапы 1–2 завершены: ядра и обёртки реализованы, регрессия
-cocotb (core / wrapper / harness) проходит, стенд проверен в симуляции.
-Модель платы ожидается — аппаратно-зависимые решения отложены и фиксируются
+**Статус:** ядра и обёртки реализованы, регрессия cocotb (core / wrapper /
+harness) проходит с оракулом против эталонных моделей; статические метрики
+сняты синтезом Yosys ([docs/results/synthesis.md](docs/results/synthesis.md)).
+Плата и синтез в вендорной САПР пока недоступны — поэтому Fmax и LUT/FF
+вендорного P&R в отчёте отсутствуют. Аппаратно-зависимые решения фиксируются
 в [docs/board.md](docs/board.md).
 
 ---
@@ -76,8 +78,8 @@ fpga-integrity-module/
 │   └── harness/          # стимулы, инжектор, счётчики, контроллер, UART
 ├── boards/               # board-зависимые обёртки и constraints (после получения платы)
 ├── tb/                   # cocotb: модели, directed/random/error-тесты
-├── scripts/              # gen_crc.py, collect.py, analyze.py, parse_reports.py
-├── syn/                  # скрипты синтеза (после выбора САПР)
+├── scripts/              # synth.py, collect.py, analyze.py, parse_reports.py, cov_report.py
+├── syn/                  # Yosys-скрипты и отчёты синтеза (syn/reports/)
 ├── data/                 # сырые результаты измерений (CSV/JSON)
 └── docs/                 # документация (см. ниже)
 ```
@@ -86,10 +88,12 @@ fpga-integrity-module/
 
 - **RTL:** SystemVerilog (синтезируемое подмножество, без вендорных примитивов).
 - **Симулятор:** Verilator ≥ 5.0 — самый быстрый RTL-симулятор, поддерживается cocotb.
-- **Testbench:** cocotb + cocotbext-axi, эталонные модели на Python.
-- **САПР и кристалл:** определяются после получения платы ([docs/board.md](docs/board.md)).
-  До этого допускается предварительный синтез на произвольном кристалле
-  только для отладки flow; такие результаты помечаются как предварительные.
+- **Testbench:** cocotb + собственные AXI4-Stream source/sink (`tb/test_utils.py`),
+  эталонные модели на Python; внешний `cocotbext-axi` не используется.
+- **Синтез:** Yosys (в т.ч. WASM-сборка `yowasp-yosys`) даёт gate-equivalent
+  метрики и число триггеров, [docs/results/synthesis.md](docs/results/synthesis.md).
+- **САПР и кристалл:** определяются после получения платы ([docs/board.md](docs/board.md));
+  Fmax и вендорные LUT/FF появятся только после P&R.
 
 ## Быстрый старт
 
@@ -109,6 +113,8 @@ make harness    # только симуляция стенда
 make sim-measure         # DATA_WIDTH=32 по умолчанию
 make sim-measure-all     # DATA_WIDTH=8 и 32, один сводный отчёт
 make sim-false-rate      # научные генераторы искажений: false/undetected rate
+make synth              # синтез Yosys: таблица аппаратных затрат
+make cov-report         # суммарный отчёт по покрытию RTL
 
 # Отдельные режимы регрессии:
 python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick] [--only NAME]
@@ -145,11 +151,15 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 ## План работ
 
 - [x] **Этап 1.** Реализация алгоритмов (RTL-ядра + единые обёртки)
-- [x] **Этап 2.** Верификация (unit → random → error-кампании → покрытие)
+- [x] **Этап 2.** Верификация (unit → random → error-кампании → покрытие):
+  94 конфигурации, 249/249 тестов, покрытие RTL 95.45 %; фактические числа —
+  [docs/coverage.md](docs/coverage.md) и [docs/test_report.md](docs/test_report.md)
 - [ ] **Этап 3.** Получение платы, фиксация характеристик ([docs/board.md](docs/board.md))
 - [ ] **Этап 4.** Топ-модуль стенда (реализован и проверен в симуляции),
   bring-up на плате, автоматический сбор данных
-- [ ] **Этап 5.** Анализ данных, сравнительные таблицы и графики, выводы
+- [~] **Этап 5.** Анализ: синтез и симуляционные сравнения готовы
+  ([docs/results/conclusion.md](docs/results/conclusion.md)); данные с платы
+  и вендорные метрики ожидаются
 
 Этапы 1–2 и разработка стенда в симуляции ведутся параллельно, не дожидаясь плату.
 Критерии входа/выхода этапов: [docs/roadmap.md](docs/roadmap.md).
@@ -169,6 +179,10 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 | [docs/measurement_plan.md](docs/measurement_plan.md) | Методика измерений на плате и анализа данных |
 | [docs/false_rate.md](docs/false_rate.md) | Научные генераторы искажений и измерение false rate |
 | [docs/roadmap.md](docs/roadmap.md) | Этапы работ, зависимости, критерии |
+| [docs/results/synthesis.md](docs/results/synthesis.md) | Статические метрики из Yosys (gate-equivalent, FF) |
+| [docs/results/conclusion.md](docs/results/conclusion.md) | Итоговое сравнение и выводы |
+| [docs/coverage.md](docs/coverage.md) | Фактическое покрытие RTL (слияние всех конфигураций) |
+| [boards/README.md](boards/README.md) | План вендорного слоя и bring-up |
 | [docs/board.md](docs/board.md) | Шаблон фиксации характеристик платы (заполняется при получении) |
 | [docs/decisions.md](docs/decisions.md) | Журнал принятых решений |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Workflow команды, стиль кода, правила ревью |

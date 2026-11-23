@@ -82,6 +82,27 @@ def _reverse_bits(value: int, width: int) -> int:
     return result
 
 
+_CRC_TABLES: dict[tuple[int, int], list[int]] = {}
+
+
+def _crc_table(width: int, poly: int) -> list[int]:
+    """MSB-first byte table; cached per (width, polynomial)."""
+    key = (width, poly)
+    cached = _CRC_TABLES.get(key)
+    if cached is not None:
+        return cached
+    mask = (1 << width) - 1
+    top = 1 << (width - 1)
+    table = []
+    for byte in range(256):
+        value = byte << (width - 8) if width >= 8 else byte
+        for _ in range(8):
+            value = ((value << 1) & mask) ^ (poly if value & top else 0)
+        table.append(value & mask)
+    _CRC_TABLES[key] = table
+    return table
+
+
 def crc(
     data: bytes,
     width: int,
@@ -91,17 +112,18 @@ def crc(
     refout: bool,
     xorout: int,
 ) -> int:
+    # Table-driven equivalent of the MSB-first bitwise LFSR in crc_engine.sv.
+    # It keeps 1000-packet random regressions practical while producing
+    # bit-identical results (verified by the catalogue check values).
     mask = (1 << width) - 1
     poly &= mask
+    table = _crc_table(width, poly)
     value = init & mask
+    shift = width - 8
     for byte in data:
-        if refin:
-            byte = _reverse_bits(byte, 8)
-        for bit in range(7, -1, -1):
-            feedback = ((value >> (width - 1)) & 1) ^ ((byte >> bit) & 1)
-            value = (value << 1) & mask
-            if feedback:
-                value ^= poly
+        fed = _reverse_bits(byte, 8) if refin else byte
+        index = fed ^ ((value >> shift) & 0xFF) if shift >= 0 else fed
+        value = ((value << 8) & mask) ^ table[index]
     if refout:
         value = _reverse_bits(value, width)
     return (value ^ xorout) & mask

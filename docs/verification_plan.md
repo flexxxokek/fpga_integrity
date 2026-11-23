@@ -4,7 +4,8 @@
 
 - **Симулятор:** Verilator ≥ 5.0 (самый быстрый; ограничения — нет задержек `#`
   и X-пропагации, компенсируется lint-ом и ассертами).
-- **Testbench:** cocotb + cocotbext-axi (AxiStreamSource/Sink/Monitor).
+- **Testbench:** cocotb 2.x с собственными AXI4-Stream source/sink
+  (`tb/test_utils.py`) — внешний `cocotbext-axi` не используется.
 - **Подход:** самопроверяющийся scoreboard против эталонной модели Python,
   одинаковый набор тестов для всех алгоритмов через единый интерфейс обёрток.
 
@@ -16,7 +17,7 @@
 | Checksum | собственная (sum + fold, RFC 1071) |
 | Fletcher | собственная |
 | Adler-32 | `zlib.adler32` |
-| CRC-8/16/32/32C | `crcmod.predefined` (для CRC-32 дополнительно `zlib.crc32`) |
+| CRC-8/16/32/32C | побитовый эталон в `tb/model.py` (проверен на каталожных check-значениях из спецификации); `crcmod` из зависимостей удалён |
 | SHA-256 | `hashlib.sha256` |
 
 Модели живут в `tb/model.py`; известные векторы — в `tb/vectors/`.
@@ -32,9 +33,9 @@
 
 | Группа | Содержание |
 |--------|------------|
-| Directed | известные векторы из spec.md; пустой пакет; 1 байт; длины W−1, W, W+1; все паттерны `tkeep` на последнем слове; back-to-back пакеты; сброс посреди пакета |
-| Constrained-random | ≥ 1000 пакетов на конфигурацию: длины 0…2048, случайные паузы `tvalid`, случайный backpressure `tready` |
-| Error-кампании | clean; single-bit; burst длиной 1…40 бит; byte-swap; zero-insert — идентичные искажения для всех алгоритмов |
+| Directed | известные векторы из spec.md; пустой пакет; 1 байт; длины W−1, W, W+1; граничные длины W−1/W/W+1 обработаны `make_beats`; back-to-back пакеты и сброс посреди пакета — `test_wrapper.back_to_back_and_reset` |
+| Constrained-random | 1000 пакетов на конфигурацию, длины 0…2048 (`test_core.directed_and_random`); паузы `tvalid` и backpressure `tready` — `test_wrapper.clean_roundtrip`, ассерты стабильности AXI в `test_utils.drive_stream` |
+| Error-кампании | clean (MODE 0), single-bit (1), burst (2), byte-swap (3), zero-insert (4), Gilbert–Elliott (5), zero/invert/randomize all (6/7/8), искажение тега (9) — все режимы запускаются через `MODE=<n>`; идентичные искажения для всех lane |
 | Научные генераторы | Gilbert–Elliott burst channel (RTL MODE=5, модель в `scripts/false_rate_suite.py`) и векторы HDLen Купмана (`tb/vectors/koopman_hd.json`) — [docs/false_rate.md](false_rate.md) |
 | Протокол | ассерты AXI-Stream (стабильность сигналов при stall), совместимые с Verilator |
 | Покрытие | покрытие строк/переключений Verilator; функциональное (длина × keep × stall) — опционально |
@@ -62,7 +63,11 @@
 ## 7. Критерии готовности (на каждое ядро/обёртку)
 
 - все тесты зелёные локально и в CI;
-- покрытие строк RTL ≥ 95 %;
-- 0 расхождений с эталонной моделью на random-регрессии;
+- покрытие строк RTL ≥ 95 % — фактическое значение и список файлов:
+  [docs/coverage.md](coverage.md) (отчёт слить `make cov-report`);
+- 0 расхождений с эталонной моделью на random-регрессии и в harness-оракуле;
 - TX/RX корректно работают при паузах, backpressure и сбросе;
-- латентность зафиксирована и проверена тестом.
+- латентность зафиксирована тестом `test_wrapper.latency`.
+
+Если критерий покрытия не достигнут, он должен быть честно указан в отчёте,
+а не объявлен выполненным.

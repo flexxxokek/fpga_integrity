@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = 0
     with open(out_path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
         writer.writeheader()
         for line in read_lines(args):
             parsed = parse_line(line)

@@ -39,7 +39,7 @@ RTL_SOURCES := $(sort $(wildcard rtl/cores/*.sv rtl/wrappers/*.sv rtl/harness/*.
 LINT_COMMON := --lint-only -Wall -Wno-fatal -Irtl/cores
 LINT_TOP    := --top-module exp_harness_top
 
-.PHONY: all lint sim sim-quick cov harness sim-measure sim-measure-all sim-false-rate test-false-rate gen-vectors clean help
+.PHONY: all lint sim sim-quick cov harness sim-measure sim-measure-all sim-false-rate sim-tag-rate test-false-rate gen-vectors synth cov-report test-report clean help
 
 all: lint sim
 
@@ -52,7 +52,10 @@ help:
 	@echo "make sim-measure - simulator data collection: ticks/byte per algorithm"
 	@echo "make sim-measure-all - both DATA_WIDTH 8 and 32 in one summary"
 	@echo "make sim-false-rate  - scientific false-rate campaign (Gilbert-Elliott + Koopman + HD sweep)"
+	@echo "make sim-tag-rate    - tag-corruption campaign (RX must detect a damaged tag)"
 	@echo "make test-false-rate - pytest checks for the scientific generators"
+	@echo "make synth         - Yosys synthesis + static LUT/FF comparison table"
+	@echo "make cov-report    - merge per-config coverage into docs/coverage.md"
 	@echo "make gen-vectors   - regenerate HDLen + GF(2) adversarial vector sets"
 	@echo "make clean      - remove simulation builds and caches"
 
@@ -113,6 +116,8 @@ sim-false-rate:
 	$(PY) scripts/false_rate_suite.py --generator gilbert_elliott \
 		--packets $(SIM_FAULT_PACKETS) --length $(SIM_FAULT_LEN_MAX) \
 		--seed $(SIM_FAULT_SEED) --min-missed-events 20 \
+		--mean-gap $$(( 65536 / $(SIM_FAULT_P_GB) )) \
+		--mean-burst $$(( 65536 / $(SIM_FAULT_P_BG) )) \
 		--out data/model_gilbert_elliott.csv
 	$(PY) scripts/false_rate_suite.py --generator koopman \
 		--out data/model_koopman.csv
@@ -129,8 +134,41 @@ sim-false-rate:
 	$(PY) scripts/pud_eval.py --input data/model_hd_sweep.csv \
 		--out docs/results/false_rate/pud.md
 
+# Tag-corruption campaign: verifies the RX actually detects a damaged tag.
+sim-tag-rate:
+	@mkdir -p data
+	@rm -f data/sim_tag.log
+	MODE=9 NUM_PACKETS=$(SIM_FAULT_PACKETS) LEN_MAX=$(SIM_FAULT_LEN_MAX) \
+	SEED=$(SIM_FAULT_SEED) SIM_REPORT_LOG=data/sim_tag.log \
+	CAMPAIGN=tag_corruption \
+	$(PY) tb/run_tests.py --mode harness --widths 32 \
+		--only harness_fault_mode9
+	$(PY) scripts/collect.py --input data/sim_tag.log \
+		--board sim_verilator_tag --campaign tag_corruption \
+		--seed $(SIM_FAULT_SEED) --out data/sim_tag.csv
+
 test-false-rate:
 	$(PY) -m pytest tb/test_false_rate_suite.py -q
+
+# Static hardware-cost comparison.  Uses WASM Yosys (`pip install
+# yowasp-yosys`) when a system yosys is not available.
+synth:
+	$(PY) scripts/synth.py
+	$(PY) scripts/parse_reports.py --input syn/reports --out data/synthesis.csv
+	$(PY) scripts/synth_table.py --input data/synthesis.csv \
+		--out docs/results/synthesis.md
+
+# Merge every per-configuration coverage file into one report.  The old
+# "coverage >= 95%" claim was never backed by such a report.
+cov-report:
+	$(PY) scripts/cov_report.py --build-root sim_build/regression \
+		--out docs/coverage.md
+
+# Prefer a concrete regression log (LOG=path/to/log), otherwise aggregate the
+# per-configuration results.xml files left by `make sim` / `make cov`.
+test-report:
+	$(PY) scripts/test_report.py --build-root sim_build/regression \
+		$(if $(LOG),--log $(LOG),) --out docs/test_report.md
 
 # Regenerate both HDLen-derived and GF(2)-derived adversarial vector sets.
 gen-vectors:
@@ -138,5 +176,7 @@ gen-vectors:
 	$(PY) scripts/gen_zero_syndrome.py
 
 clean:
-	rm -rf sim_build tb/results.xml
+	rm -rf sim_build tb/results.xml tb/coverage.dat
+	rm -rf syn/yosys/build
+	rm -f data/*.log data/*.tmp
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

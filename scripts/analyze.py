@@ -188,6 +188,10 @@ def metric_columns(summary: dict[tuple[str, str], dict[str, float]]) -> list[str
     present = set()
     for entry in summary.values():
         present.update(entry)
+    # The packed counters are an internal encoding (four 8-bit buckets in one
+    # 32-bit word).  Publishing them as a metric is misleading: use hw1..hw3
+    # and pud instead.
+    present -= {"corrupted_weights", "missed_weights"}
     ordered = [name for name in METRIC_ORDER if name in present]
     ordered.extend(sorted(present - set(ordered)))
     return ordered
@@ -200,7 +204,7 @@ def write_csv(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["algo", "campaign", *columns])
         for (algo, campaign), entry in sorted(summary.items()):
             writer.writerow(

@@ -13,7 +13,7 @@ package integrity_pkg;
 
   // Number of bytes required to carry a tag of TAG_WIDTH bits.
   function automatic int unsigned tag_bytes(input int unsigned tag_width);
-    return (tag_width + 7) / 8;
+    tag_bytes = (tag_width + 7) / 8;
   endfunction
 
   // Ceiling of log2(n), with n == 1 returning 1.
@@ -27,7 +27,7 @@ package integrity_pkg;
     end else begin
       r = 1;
     end
-    return r;
+    clog2 = r;
   endfunction
 
 endpackage

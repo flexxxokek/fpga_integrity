@@ -134,6 +134,11 @@ async def drive_stream(dut, beats, seed: int = 2, stall_prob: float = 0.2):
         while True:
             await FallingEdge(dut.clk)
             ready = int(dut.s_axis_tready.value)
+            # AXI4-Stream stability: the source must not change the payload
+            # while it is valid but not accepted.
+            assert int(dut.s_axis_tdata.value) == word, "tdata changed under stall"
+            assert int(dut.s_axis_tkeep.value) == keep, "tkeep changed under stall"
+            assert int(dut.s_axis_tlast.value) == last, "tlast changed under stall"
             await RisingEdge(dut.clk)
             if ready:
                 break

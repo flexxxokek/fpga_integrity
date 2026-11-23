@@ -164,7 +164,7 @@ def build_and_test(
     }
 
     runner.build(
-        verilog_sources=[str(p) for p in sources],
+        sources=[str(p) for p in sources],
         includes=[str(CORES)],
         hdl_toplevel=hdl_toplevel,
         parameters=runner_params,
@@ -174,7 +174,13 @@ def build_and_test(
         timescale=("1ns", "1ps"),
     )
 
-    env = {"PYTHONPATH": str(TB), "ALGO": str(full_params.get("ALGO", 0))}
+    env = {
+        "PYTHONPATH": str(TB),
+        "ALGO": str(full_params.get("ALGO", 0)),
+        # cocotb otherwise writes a single results.xml into test_dir and
+        # overwrites it on every configuration.
+        "COCOTB_RESULTS_FILE": str(build_dir / "results.xml"),
+    }
     for key in ("SIM_REPORT_LOG", "CAMPAIGN"):
         if key in os.environ:
             env[key] = os.environ[key]
@@ -194,7 +200,29 @@ def build_and_test(
         waves=False,
     )
 
-    tree = ET.parse(results_file)
+    # Verilator writes coverage.dat into the simulator's working directory
+    # (tb/), overwriting the previous configuration on every run.  Keep one
+    # file per build so `make cov-report` can merge all configurations.
+    coverage_dat = TB / "coverage.dat"
+    if coverage and coverage_dat.exists():
+        shutil.move(str(coverage_dat), str(build_dir / "coverage.dat"))
+
+    # cocotb writes a single results.xml into the test directory; keep a copy
+    # per configuration so `make test-report` can aggregate all of them.
+    results_copy = build_dir / "results.xml"
+    results_path = Path(results_file)
+    if results_path.exists() and results_path.resolve() != results_copy.resolve():
+        # The file may disappear between the check and the copy when another
+        # configuration finishes; reporting must not fail a passing test.
+        try:
+            shutil.copyfile(results_path, results_copy)
+        except OSError:
+            pass
+    if not results_copy.exists():
+        raise RuntimeError(f"cocotb did not write {results_copy}")
+
+    tree = ET.parse(results_copy)
+    suites = tree.findall("testsuite")
     failed = []
     for testcase in tree.iter("testcase"):
         for child in testcase:
@@ -202,6 +230,25 @@ def build_and_test(
                 failed.append(
                     f"{testcase.get('name')}: {child.get('message', child.text)}"
                 )
+
+    # Machine-readable per-configuration summary.  `scripts/test_report.py`
+    # consumes these lines from the regression log; without them the report
+    # target silently produced no data.
+    total = sum(int(suite.get("tests", 0)) for suite in suites)
+    failures = sum(int(suite.get("failures", 0)) for suite in suites)
+    errors = sum(int(suite.get("errors", 0)) for suite in suites)
+    skipped = sum(int(suite.get("skipped", 0)) for suite in suites)
+    passed = total - failures - errors - skipped
+    sim_ns = 0.0
+    cpu_s = 0.0
+    for testcase in tree.iter("testcase"):
+        cpu_s += float(testcase.get("time", 0.0))
+        for prop in testcase.iter("property"):
+            if prop.get("name") == "sim_time_duration":
+                sim_ns += float(prop.get("value", 0.0))
+    print(f"TESTS={total} PASS={passed} FAIL={failures + errors} "
+          f"SKIP={skipped} {sim_ns:.3f} {cpu_s:.3f}", flush=True)
+
     if failed:
         raise RuntimeError("; ".join(failed))
     return build_dir
@@ -258,28 +305,58 @@ def main():
                     "harness_single_bit",
                     {**harness_defaults, "MODE": int(os.environ.get("MODE", "1"))},
                 ),
+                # The UART formatter is a separate optional block.  A short
+                # campaign with a fast baud rate exercises the whole
+                # report -> UART -> host path in simulation.
+                ("harness_uart_report", {
+                    **harness_defaults,
+                    "MODE": 0,
+                    "NUM_PACKETS": 2,
+                    "ENABLE_UART": 1,
+                    "CLK_FREQ_HZ": 100_000_000,
+                    "BAUD_RATE": 1_000_000,
+                }),
+                # Compile the no-SHA branch of the harness too.
+                ("harness_no_sha",
+                 {**harness_defaults, "MODE": 0, "INCLUDE_SHA": 0}),
             ]
+            # Every injector mode is part of the verification matrix.  The
+            # earlier regression only ran modes 0/1 by default, leaving most
+            # of error_injector.sv and integrity_lane.sv uncovered.
+            harness_cases.append(
+                ("harness_ge",
+                 {**harness_defaults, "MODE": 5, "NUM_PACKETS": 256,
+                  "GE_P_GB_Q16": 128})
+            )
+            for extra_mode in (2, 3, 4, 6, 7, 8, 9):
+                harness_cases.append(
+                    (f"harness_mode{extra_mode}",
+                     {**harness_defaults, "MODE": extra_mode})
+                )
             # The burst-noise campaign is opt-in: its default parameters are
             # tuned by the caller (see `make sim-false-rate`).
             fault_mode = os.environ.get("MODE", "0")
-            if fault_mode in ("5", "6", "7", "8"):
+            if fault_mode in ("2", "3", "4", "5", "6", "7", "8", "9"):
                 harness_cases.append(
                     (f"harness_fault_mode{fault_mode}",
                      {**harness_defaults, "MODE": int(fault_mode)})
                 )
-            for name, params in harness_cases:
-                if args.only and args.only not in name:
-                    continue
-                label = f"{mode}:{name}:w{widths[0]}"
-                print(f"\n=== {label} ===", flush=True)
-                try:
-                    build_and_test(
-                        name, params, widths[0], mode, build_root,
-                        coverage=args.coverage,
-                    )
-                except Exception as exc:  # pragma: no cover
-                    print(f"FAILED {label}: {exc}", file=sys.stderr)
-                    failures.append(label)
+            # The harness is exercised at every requested width; previously
+            # only widths[0] was run, so 32/64-bit lanes were never tested.
+            for width in widths:
+                for name, params in harness_cases:
+                    if args.only and args.only not in name:
+                        continue
+                    label = f"{mode}:{name}:w{width}"
+                    print(f"\n=== {label} ===", flush=True)
+                    try:
+                        build_and_test(
+                            name, params, width, mode, build_root,
+                            coverage=args.coverage,
+                        )
+                    except Exception as exc:  # pragma: no cover
+                        print(f"FAILED {label}: {exc}", file=sys.stderr)
+                        failures.append(label)
             continue
 
         for name, params in cases:

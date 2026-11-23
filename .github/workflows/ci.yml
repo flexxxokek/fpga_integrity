@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  lint-and-sim:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,21 +27,55 @@ jobs:
       - name: Lint RTL
         run: make lint
 
-      - name: Run cocotb regression
+      - name: Regression (quick matrix)
         run: make sim-quick
 
-      - name: Test scientific false-rate generators
+      - name: Scientific generators
         run: make test-false-rate
 
       - name: Smoke false-rate model campaign
-        run: python scripts/false_rate_suite.py --generator gilbert_elliott --packets 200 --length 32 --seed 42 --out data/ci_false_rate.csv
+        run: python scripts/false_rate_suite.py --generator gilbert_elliott --packets 200 --length 32 --seed 42 --mean-gap 512 --out data/ci_false_rate.csv
 
-      - name: Upload regression results
+      - name: Synthesis (real static metrics)
+        run: make synth
+
+      - name: Coverage on two widths
+        run: |
+          make cov WIDTHS=8,32 2>&1 | tee /tmp/regression.log
+          make cov-report
+          make test-report LOG=/tmp/regression.log
+
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cocotb-results
+          name: verification-reports
           path: |
             tb/results.xml
             sim_build/**/results.xml
+            sim_build/**/coverage.dat
+            docs/coverage.md
+            docs/results/synthesis.md
+            data/synthesis.csv
           if-no-files-found: ignore
+
+  full-regression:
+    runs-on: ubuntu-latest
+    # The full matrix runs on pushes to the main branches only; PRs still get
+    # the quick matrix above.
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Full 8/32/64-bit regression
+        run: make sim

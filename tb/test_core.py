@@ -67,8 +67,10 @@ async def directed_and_random(dut):
         bytes([0xFF]) * (3 * beat_bytes),
     ]
     rng = random.Random(1234 + p["algo"] * 17 + data_width)
-    for _ in range(24):
-        length = rng.randrange(0, 320)
+    # Constrained-random regression: 1000 packets per configuration, as
+    # required by docs/verification_plan.md.
+    for _ in range(1000):
+        length = rng.randrange(0, 2049)
         directed.append(bytes(rng.randrange(256) for _ in range(length)))
 
     for packet in directed:

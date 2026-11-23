@@ -95,10 +95,17 @@ def parse_quartus(text: str) -> dict[str, object]:
 def parse_yosys(text: str) -> dict[str, object]:
     luts = ffs = brams = dsps = 0
     found = False
-    for match in re.finditer(r"^\s+([A-Za-z0-9_$\\]+)\s+(\d+)\s*$", text, re.M):
-        name = match.group(1).upper()
-        count = int(match.group(2))
-        if "LUT" in name:
+    # Internal Yosys gate cells ($_AND_, $_MUX_, ...) from `synth -noabc` are
+    # used as a gate-equivalent proxy when no mapped LUT cells are present.
+    # This happens with the WASM Yosys build, which cannot run ABC.
+    generic_gates = (
+        "$_AND_", "$_NAND_", "$_OR_", "$_NOR_", "$_XOR_", "$_XNOR_",
+        "$_NOT_", "$_MUX_", "$_AOI_", "$_OAI_", "$_ANDNOT_",
+    )
+    for match in re.finditer(r"^\s+(\d+)\s+([A-Za-z0-9_$\\]+)\s*$", text, re.M):
+        count = int(match.group(1))
+        name = match.group(2).upper()
+        if "LUT" in name or name in generic_gates:
             luts += count
             found = True
         if any(token in name for token in ("DFF", "FDRE", "FDCE", "FDPE", "FDSE")):
@@ -198,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print(f"wrote {len(rows)} rows to {out_path}")

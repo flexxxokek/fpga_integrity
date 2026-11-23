@@ -2,13 +2,19 @@
 
 ## 1. Метрики
 
-### Статические (из отчётов САПР)
+### Статические
 
 | Метрика | Источник |
 |---------|----------|
-| LUT / FF / BRAM / DSP | utilization report |
-| Fmax, WNS | static timing analysis |
-| Латентность (такты) | RTL + подтверждение тестом/счётчиком |
+| gate-equivalent cells / FF | Yosys `synth -noabc`, `make synth` — доступно сейчас |
+| LUT / FF / BRAM / DSP | utilization report вендорной САПР — после этапа 3 |
+| Fmax, WNS | static timing analysis — после этапа 3 |
+| Латентность (такты) | RTL + подтверждение тестом `test_wrapper.latency` |
+
+Результаты Yosys — gate-equivalent прокси, не вендорные LUT: `make synth`
+применяет одинаковый flow ко всем ядрам, поэтому столбцы сравнимы между
+собой, но не могут заменить реальный utilization report. Fmax намеренно не
+выдумывается.
 
 ### Динамические (из стенда на плате)
 
@@ -41,6 +47,8 @@
 | burst_L | burst длиной L ∈ {2, 4, 8, 16, 24, 32, 40} | 2 000 на L |
 | byte_swap | перестановка двух байтов | 2 000 |
 | zero_insert | вставка нулевых байтов | 2 000 |
+| gilbert_elliott | пакетный канал (MODE=5) | 256 |
+| tag_corruption | искажение байтов тега (MODE=9) | 256 |
 
 Счётчики на lane: `packets_total`, `packets_corrupted`, `errors_detected` (TP),
 `errors_missed` (FN), `false_alarms` (FP), `cycles`, `bytes`, `latency_sum/max`.

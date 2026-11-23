@@ -16,6 +16,17 @@ coverage.dat
 syn/yosys/build/
 # Сгенерированные отчёты синтеза: воспроизводятся командой `make synth`
 syn/reports/
+# Quartus / board build outputs
+boards/de2_115/output_files/
+boards/de2_115/incremental_db/
+boards/de2_115/db/
+boards/de2_115/*.rpt
+boards/de2_115/*.summary
+boards/de2_115/*.sof
+boards/de2_115/*.pin
+boards/de2_115/*.jdi
+boards/de2_115/*.sld
+boards/de2_115/*.done
 .Xil/
 *.jou
 *.str
@@ -34,3 +45,5 @@ docs/results/*.png.tmp
 .DS_Store
 .idea/
 .vscode/
+
+boards/de2_115/*.smsg

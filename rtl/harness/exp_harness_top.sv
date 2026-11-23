@@ -200,6 +200,7 @@ module exp_harness_top #(
       .corrupted_weights(l_cw[4]), .missed_weights(l_mw[4])
   );
 
+  generate
   if (INCLUDE_SHA) begin : g_sha_lane
     integrity_lane #(
         .DATA_WIDTH(DATA_WIDTH), .ALGO(5), .TAG_WIDTH(256),
@@ -229,6 +230,7 @@ module exp_harness_top #(
     assign l_mw[5]        = 32'd0;
     assign lane_ready[5]  = 1'b1;
   end
+  endgenerate
 
   always_comb begin
     done = stim_done;

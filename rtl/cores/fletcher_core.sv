@@ -38,6 +38,16 @@ module fletcher_core #(
   logic [31:0]            tmp_sum;
   logic [31:0]            tmp_word;
 
+  // MODULUS = 2**BLOCK_WIDTH - 1.  tmp_sum is at most 2*MODULUS, so one
+  // end-around fold plus one conditional subtraction is exact and far
+  // shallower than the divider Quartus infers for `% MODULUS`.
+  function automatic logic [BLOCK_WIDTH-1:0] mod_flet(input logic [31:0] value);
+    logic [31:0] folded;
+    folded = (value & 32'(MODULUS)) + (value >> BLOCK_WIDTH);
+    if (folded >= 32'(MODULUS)) folded = folded - 32'(MODULUS);
+    return BLOCK_WIDTH'(folded);
+  endfunction
+
   always_comb begin
     next_blk  = blk_q;
     next_fill = fill_q;
@@ -51,9 +61,9 @@ module fletcher_core #(
         next_blk = (next_blk << 8) | 8'(data[i*8 +: 8]);
         if (next_fill == 4'(BLOCK_BYTES - 1)) begin
           tmp_sum   = 32'(next_sum1) + 32'(next_blk);
-          next_sum1 = BLOCK_WIDTH'(tmp_sum % MODULUS);
+          next_sum1 = mod_flet(tmp_sum);
           tmp_sum   = 32'(next_sum2) + 32'(next_sum1);
-          next_sum2 = BLOCK_WIDTH'(tmp_sum % MODULUS);
+          next_sum2 = mod_flet(tmp_sum);
           next_blk  = '0;
           next_fill = 4'd0;
         end else begin
@@ -65,9 +75,9 @@ module fletcher_core #(
     if (last && (next_fill != 4'd0)) begin
       tmp_word  = 32'(next_blk) << (8 * (BLOCK_BYTES - 32'(next_fill)));
       tmp_sum   = 32'(next_sum1) + tmp_word;
-      next_sum1 = BLOCK_WIDTH'(tmp_sum % MODULUS);
+      next_sum1 = mod_flet(tmp_sum);
       tmp_sum   = 32'(next_sum2) + 32'(next_sum1);
-      next_sum2 = BLOCK_WIDTH'(tmp_sum % MODULUS);
+      next_sum2 = mod_flet(tmp_sum);
     end
   end
 

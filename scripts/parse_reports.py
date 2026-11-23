@@ -88,6 +88,7 @@ def parse_quartus(text: str) -> dict[str, object]:
         "fmax_mhz": to_float(
             first(r";\s*Fmax\s*=\s*([\d.]+)\s*MHz", text)
             or first(r"Fmax\s*[:=]\s*([\d.]+)\s*MHz", text)
+            or first(r"\|\s*Fmax\s*\|\s*([\d.]+)\s*MHz", text)
         ),
     }
 

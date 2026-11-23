@@ -27,13 +27,22 @@ module adler32_core #(
   logic [31:0] next_a;
   logic [31:0] next_b;
 
+  // Both operands are < 2*MODULUS, so one conditional subtraction is an exact
+  // replacement for `% MODULUS` and avoids a 32-bit divider in the FPGA.
+  function automatic logic [15:0] mod_adler(input logic [31:0] value);
+    logic [31:0] reduced;
+    reduced = value;
+    if (reduced >= MODULUS) reduced = reduced - MODULUS;
+    return 16'(reduced);
+  endfunction
+
   always_comb begin
     next_a = {16'd0, a_q};
     next_b = {16'd0, b_q};
     for (int unsigned i = 0; i < BYTES; i++) begin
       if (keep[i]) begin
-        next_a = (next_a + 32'(data[i*8 +: 8])) % MODULUS;
-        next_b = (next_b + next_a) % MODULUS;
+        next_a = 32'(mod_adler(next_a + 32'(data[i*8 +: 8])));
+        next_b = 32'(mod_adler(next_b + next_a));
       end
     end
   end

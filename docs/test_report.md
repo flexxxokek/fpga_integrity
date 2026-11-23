@@ -15,17 +15,17 @@ regression results (the per-configuration `results.xml` files under `sim_build/r
 
 | Metric | Value |
 |---|---:|
-| Build/test configurations | 94 |
-| cocotb tests | 249 |
-| Passed | 249 |
+| Build/test configurations | 116 |
+| cocotb tests | 272 |
+| Passed | 272 |
 | Failed | 0 |
 | Skipped | 0 |
-| Aggregate test sim time | 389,108,360 ns |
-| Aggregate test CPU time | 1020.57 s |
+| Aggregate test sim time | 415,575,200 ns |
+| Aggregate test CPU time | 831.56 s |
 
 ### Configuration matrix
 
-- Levels: core (38), harness (17), wrapper (39).
+- Levels: core (39), harness (38), wrapper (39).
 - Algorithm configurations: 13 (adler32, checksum16_ones, checksum8_wrap, crc_crc16_arc, crc_crc16_ccitt_false, crc_crc32, crc_crc32c, crc_crc8, fletcher16, fletcher32, parity_even, parity_odd, sha256).
 - Data widths: 32, 64, 8.
 

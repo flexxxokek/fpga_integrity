@@ -1,0 +1,127 @@
+# Terasic DE2-115 board layer for the integrity measurement stand.
+# Pin numbers come from the official DE2-115 pin assignment tables.
+
+set_global_assignment -name FAMILY "Cyclone IV E"
+set_global_assignment -name DEVICE EP4CE115F29C7
+set_global_assignment -name TOP_LEVEL_ENTITY de2_115_top
+set_global_assignment -name SDC_FILE de2_115.sdc
+
+# --- Board top -------------------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE de2_115_top.sv
+
+# --- Reusable RTL (relative to this project directory) ----------------------
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/integrity_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/parity_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/checksum_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/fletcher_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/adler32_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/crc_engine.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/sha256_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/wrappers/integrity_tx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/wrappers/integrity_rx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/stimulus_gen.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/error_injector.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/integrity_lane.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/uart_tx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/uart_rx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/report_uart.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/exp_harness_top.sv
+
+# --- Pin assignments -------------------------------------------------------
+# 50 MHz oscillator, dedicated clock input.
+set_location_assignment PIN_Y2 -to CLOCK_50
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to CLOCK_50
+
+# Push buttons (active low).  KEY[0] = reset, KEY[1] unused in this build.
+set_location_assignment PIN_M23 -to KEY[0]
+set_location_assignment PIN_M21 -to KEY[1]
+set_location_assignment PIN_N21 -to KEY[2]
+set_location_assignment PIN_R24 -to KEY[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to KEY[*]
+
+# RS-232 via the on-board transceiver.
+set_location_assignment PIN_G12 -to UART_RXD
+set_location_assignment PIN_G9  -to UART_TXD
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to UART_RXD
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to UART_TXD
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to UART_RXD
+
+# Status LEDs (2.5 V bank on DE2-115).
+set_location_assignment PIN_G19 -to LEDR[0]
+set_location_assignment PIN_F19 -to LEDR[1]
+set_location_assignment PIN_E19 -to LEDR[2]
+set_location_assignment PIN_F21 -to LEDR[3]
+set_instance_assignment -name IO_STANDARD "2.5 V" -to LEDR[*]
+
+# --- Misc ------------------------------------------------------------------
+set_global_assignment -name OPTIMIZATION_MODE "Balanced"
+set_global_assignment -name SEED 1
+
+set_global_assignment -name LAST_QUARTUS_VERSION "21.1.0 Lite Edition"
+# --- Visualization: 7-segment displays and green LEDs ------------------
+set_location_assignment PIN_G18 -to HEX[0][0]
+set_location_assignment PIN_F22 -to HEX[0][1]
+set_location_assignment PIN_E17 -to HEX[0][2]
+set_location_assignment PIN_L26 -to HEX[0][3]
+set_location_assignment PIN_L25 -to HEX[0][4]
+set_location_assignment PIN_J22 -to HEX[0][5]
+set_location_assignment PIN_H22 -to HEX[0][6]
+set_location_assignment PIN_M24 -to HEX[1][0]
+set_location_assignment PIN_Y22 -to HEX[1][1]
+set_location_assignment PIN_W21 -to HEX[1][2]
+set_location_assignment PIN_W22 -to HEX[1][3]
+set_location_assignment PIN_W25 -to HEX[1][4]
+set_location_assignment PIN_U23 -to HEX[1][5]
+set_location_assignment PIN_U24 -to HEX[1][6]
+set_location_assignment PIN_AA25 -to HEX[2][0]
+set_location_assignment PIN_AA26 -to HEX[2][1]
+set_location_assignment PIN_Y25 -to HEX[2][2]
+set_location_assignment PIN_W26 -to HEX[2][3]
+set_location_assignment PIN_Y26 -to HEX[2][4]
+set_location_assignment PIN_W27 -to HEX[2][5]
+set_location_assignment PIN_W28 -to HEX[2][6]
+set_location_assignment PIN_V21 -to HEX[3][0]
+set_location_assignment PIN_U21 -to HEX[3][1]
+set_location_assignment PIN_AB20 -to HEX[3][2]
+set_location_assignment PIN_AA21 -to HEX[3][3]
+set_location_assignment PIN_AD24 -to HEX[3][4]
+set_location_assignment PIN_AF23 -to HEX[3][5]
+set_location_assignment PIN_Y19 -to HEX[3][6]
+set_location_assignment PIN_AB19 -to HEX[4][0]
+set_location_assignment PIN_AA19 -to HEX[4][1]
+set_location_assignment PIN_AG21 -to HEX[4][2]
+set_location_assignment PIN_AH21 -to HEX[4][3]
+set_location_assignment PIN_AE19 -to HEX[4][4]
+set_location_assignment PIN_AF19 -to HEX[4][5]
+set_location_assignment PIN_AE18 -to HEX[4][6]
+set_location_assignment PIN_AD18 -to HEX[5][0]
+set_location_assignment PIN_AC18 -to HEX[5][1]
+set_location_assignment PIN_AB18 -to HEX[5][2]
+set_location_assignment PIN_AH19 -to HEX[5][3]
+set_location_assignment PIN_AG19 -to HEX[5][4]
+set_location_assignment PIN_AF18 -to HEX[5][5]
+set_location_assignment PIN_AH18 -to HEX[5][6]
+set_location_assignment PIN_AA17 -to HEX[6][0]
+set_location_assignment PIN_AB16 -to HEX[6][1]
+set_location_assignment PIN_AA16 -to HEX[6][2]
+set_location_assignment PIN_AB17 -to HEX[6][3]
+set_location_assignment PIN_AB15 -to HEX[6][4]
+set_location_assignment PIN_AA15 -to HEX[6][5]
+set_location_assignment PIN_AC17 -to HEX[6][6]
+set_location_assignment PIN_AD17 -to HEX[7][0]
+set_location_assignment PIN_AE17 -to HEX[7][1]
+set_location_assignment PIN_AG17 -to HEX[7][2]
+set_location_assignment PIN_AH17 -to HEX[7][3]
+set_location_assignment PIN_AF17 -to HEX[7][4]
+set_location_assignment PIN_AG18 -to HEX[7][5]
+set_location_assignment PIN_AA14 -to HEX[7][6]
+set_location_assignment PIN_E21 -to LEDG[0]
+set_location_assignment PIN_E22 -to LEDG[1]
+set_location_assignment PIN_E25 -to LEDG[2]
+set_location_assignment PIN_E24 -to LEDG[3]
+set_location_assignment PIN_H21 -to LEDG[4]
+set_location_assignment PIN_G20 -to LEDG[5]
+set_location_assignment PIN_G22 -to LEDG[6]
+set_location_assignment PIN_G21 -to LEDG[7]
+set_location_assignment PIN_F17 -to LEDG[8]
+set_instance_assignment -name IO_STANDARD "2.5 V" -to LEDG[*]

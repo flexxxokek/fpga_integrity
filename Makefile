@@ -8,10 +8,17 @@ VENV    ?= .venv
 VERILATOR ?= verilator
 WIDTHS  ?= 8,32,64
 
+# Vendor flow (Terasic DE2-115, Quartus Prime Lite 21.1)
+QUARTUS_ROOT ?= /opt/intelFPGA/21.1/quartus
+QUARTUS_SH   ?= $(QUARTUS_ROOT)/bin/quartus_sh
+QUARTUS_PGM  ?= $(QUARTUS_ROOT)/bin/quartus_pgm
+BOARD_DIR    ?= boards/de2_115
+
 # Simulator-based throughput measurement (ticks per byte).
 SIM_CAMPAIGN ?= clean
 SIM_WIDTH    ?= 32
 SIM_PACKETS  ?= 64
+SIM_LEN_MIN  ?= 0
 SIM_LEN_MAX  ?= 64
 SIM_SEED     ?= 0x12345678
 SIM_LOG      ?= data/sim_$(SIM_CAMPAIGN)_w$(SIM_WIDTH).log
@@ -39,7 +46,7 @@ RTL_SOURCES := $(sort $(wildcard rtl/cores/*.sv rtl/wrappers/*.sv rtl/harness/*.
 LINT_COMMON := --lint-only -Wall -Wno-fatal -Irtl/cores
 LINT_TOP    := --top-module exp_harness_top
 
-.PHONY: all lint sim sim-quick cov harness sim-measure sim-measure-all sim-false-rate sim-tag-rate test-false-rate gen-vectors synth cov-report test-report clean help
+.PHONY: all lint sim sim-quick cov harness sim-measure sim-measure-all sim-false-rate sim-tag-rate test-false-rate gen-vectors synth cov-report test-report board-build board-program board-report board-capture clean help
 
 all: lint sim
 
@@ -56,6 +63,10 @@ help:
 	@echo "make test-false-rate - pytest checks for the scientific generators"
 	@echo "make synth         - Yosys synthesis + static LUT/FF comparison table"
 	@echo "make cov-report    - merge per-config coverage into docs/coverage.md"
+	@echo "make board-build   - Quartus compile of the DE2-115 stand + timing report"
+	@echo "make board-report  - render docs/results/board.md from Quartus reports"
+	@echo "make board-program - program the DE2-115 over JTAG (connect the board first)"
+	@echo "make board-capture PORT=/dev/ttyUSB0 - receive UART report and diff with sim"
 	@echo "make gen-vectors   - regenerate HDLen + GF(2) adversarial vector sets"
 	@echo "make clean      - remove simulation builds and caches"
 
@@ -83,7 +94,7 @@ harness:
 sim-measure:
 	@mkdir -p data docs/results
 	@rm -f $(SIM_LOG)
-	MODE=0 NUM_PACKETS=$(SIM_PACKETS) LEN_MAX=$(SIM_LEN_MAX) SEED=$(SIM_SEED) \
+	MODE=0 NUM_PACKETS=$(SIM_PACKETS) LEN_MIN=$(SIM_LEN_MIN) LEN_MAX=$(SIM_LEN_MAX) SEED=$(SIM_SEED) \
 	SIM_REPORT_LOG=$(SIM_LOG) CAMPAIGN=$(SIM_CAMPAIGN) \
 	$(PY) tb/run_tests.py --mode harness --widths $(SIM_WIDTH) --only harness_clean
 	$(PY) scripts/collect.py --input $(SIM_LOG) --board sim_verilator_w$(SIM_WIDTH) \
@@ -174,6 +185,22 @@ test-report:
 gen-vectors:
 	$(PY) scripts/gen_koopman_vectors.py
 	$(PY) scripts/gen_zero_syndrome.py
+
+# Vendor flow: synthesis, place-and-route, TimeQuest timing and board report.
+board-build:
+	cd $(BOARD_DIR) && $(QUARTUS_SH) --flow compile de2_115
+	$(PY) scripts/board_report.py --project $(BOARD_DIR) --out docs/results/board.md
+
+board-report:
+	$(PY) scripts/board_report.py --project $(BOARD_DIR) --out docs/results/board.md
+
+# Run only after the USB-Blaster / JTAG cable is connected and recognised.
+board-program:
+	cd $(BOARD_DIR) && $(QUARTUS_PGM) -m JTAG -o "p;de2_115.sof@1"
+
+board-capture:
+	@test -n "$(PORT)" || (echo "usage: make board-capture PORT=/dev/ttyUSB0" >&2; exit 1)
+	$(PY) scripts/board_capture.py --port $(PORT) $(if $(BAUD),--baud $(BAUD),)
 
 clean:
 	rm -rf sim_build tb/results.xml tb/coverage.dat

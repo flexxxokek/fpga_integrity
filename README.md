@@ -154,9 +154,10 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 - [x] **Этап 2.** Верификация (unit → random → error-кампании → покрытие):
   94 конфигурации, 249/249 тестов, покрытие RTL 95.45 %; фактические числа —
   [docs/coverage.md](docs/coverage.md) и [docs/test_report.md](docs/test_report.md)
-- [ ] **Этап 3.** Получение платы, фиксация характеристик ([docs/board.md](docs/board.md))
-- [ ] **Этап 4.** Топ-модуль стенда (реализован и проверен в симуляции),
-  bring-up на плате, автоматический сбор данных
+- [x] **Этап 3.** Получение платы, фиксация характеристик: Terasic DE2-115,
+  Cyclone IV E EP4CE115F29C7, стенд 12.5 МГц ([docs/board.md](docs/board.md))
+- [~] **Этап 4.** Board-пакет (`boards/de2_115/`) и цели `make board-build` /
+  `board-program` готовы; прошивка и кампании на плате ожидают подключения JTAG
 - [~] **Этап 5.** Анализ: синтез и симуляционные сравнения готовы
   ([docs/results/conclusion.md](docs/results/conclusion.md)); данные с платы
   и вендорные метрики ожидаются

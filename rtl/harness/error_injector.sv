@@ -57,6 +57,8 @@ module error_injector #(
   logic [31:0]             bit_sel;
   logic [31:0]             valid_bits;
   logic [31:0]             rank;
+  logic [31:0]             rank_v;
+  logic [7:0]              mix_b;  // Quartus 21.1 cannot slice a function call directly
 
   logic                    ge_state_q;
   logic                    ge_state_next;
@@ -86,6 +88,16 @@ module error_injector #(
     end
   endgenerate
 
+  // A clean campaign never needs the random bit rank.  Pruning the modulo
+  // branch avoids a full divider on the broadcast critical path in Quartus.
+  generate
+    if (MODE == 0) begin : g_rank_none
+      assign rank_v = 32'd0;
+    end else begin : g_rank_random
+      assign rank_v = (valid_bits != 32'd0) ? (rng_q % valid_bits) : 32'd0;
+    end
+  endgenerate
+
   // Select a bit inside a byte covered by tkeep.  Padding bits are never
   // corrupted, so an injected error always changes payload data.
   always_comb begin
@@ -96,7 +108,7 @@ module error_injector #(
       end
     end
 
-    rank = (valid_bits != 32'd0) ? (rng_q % valid_bits) : 32'd0;
+    rank = rank_v;
     bit_sel = 32'd0;
     for (int unsigned i = 0; i < BEAT_BYTES; i++) begin
       if (s_axis_tkeep[i]) begin
@@ -110,6 +122,7 @@ module error_injector #(
   end
 
   always_comb begin
+    mix_b = 8'd0;
     beat_has_bytes = (s_axis_tkeep != '0);
     // Mode 5 is a channel model: it must consume every payload beat, not
     // just the first one, otherwise the tested codeword is only one beat.
@@ -160,7 +173,8 @@ module error_injector #(
       // Randomise all kept bytes with a per-byte PRNG draw.
       for (int unsigned i = 0; i < BEAT_BYTES; i++) begin
         if (s_axis_tkeep[i]) begin
-          mask[i*8 +: 8] = xs32(rng_q ^ (32'(i) * 32'h85EB_CA6B))[7:0];
+          mix_b = 8'(xs32(rng_q ^ (32'(i) * 32'h85EB_CA6B)));
+          mask[i*8 +: 8] = mix_b;
         end
       end
     end else begin

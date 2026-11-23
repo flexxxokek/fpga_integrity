@@ -1,25 +1,48 @@
 # Board layer
 
-Плата ещё не получена (`docs/board.md`), поэтому вендорный слой отсутствует.
-Этот файл фиксирует план, чтобы bring-up не начинался с нуля.
+## Terasic DE2-115 (Cyclone IV E EP4CE115F29C7)
 
-## Что должно появиться после получения платы
+Плата получена 2026-11-23. Board-пакет лежит в [`de2_115/`](de2_115/):
 
 ```
-boards/<board_name>/
-├── board_top.sv     # инстанс exp_harness_top, клоки, сброс, пины
-├── constraints.xdc  # или .sdc/.pcf — зависит от САПР
-└── README.md        # конкретный pinout и частота
+de2_115/
+├── de2_115.qpf       # Quartus project
+├── de2_115.qsf       # device, sources, pin assignments, IO standards
+├── de2_115.sdc       # 50 MHz input + generated 12.5 MHz stand clock
+├── de2_115_top.sv    # board top: KEY/LED/UART -> exp_harness_top
+└── output_files/     # .sof и отчёты (игнорируются git)
 ```
+
+Характеристики и чеклист bring-up: [docs/board.md](../docs/board.md).
+
+### Быстрый старт
+
+```bash
+make board-build    # Quartus compile + TimeQuest + docs/results/board.md
+# подключить USB-Blaster / JTAG
+make board-program  # прошивка .sof
+make board-capture PORT=/dev/ttyUSB0  # приём RESULT/DONE + сверка с референсом
+```
+
+Скрипт ждёт нажатия KEY[0] (перезапуск кампании) и сравнивает все 6 lane с
+`data/sim_clean_w32.csv`.
+
+Стенд работает на 12.5 МГц (`CLOCK_50 / 4`): Fmax полного стенда 19.84 МГц,
+поэтому прямая работа на 50 МГц не закрывает тайминг.
+
+`make board-build` использует `QUARTUS_SH` (по умолчанию
+`/opt/intelFPGA/21.1/quartus/bin/quartus_sh`). Параметры кампании
+(`NUM_PACKETS`, `LEN_MAX`, `MODE`, `SEED`) заданы в `de2_115_top.sv` и
+совпадают с симуляционным референсом `data/sim_clean_w32.csv`.
 
 ## Обязательные проверки bring-up
 
-1. Смок-тест тактовой сети и сброса (LED).
-2. UART loopback на выбранной частоте: `CLK_FREQ_HZ`, `BAUD_RATE`
-   передаются как параметры `exp_harness_top`.
-3. Прогон `MODE=0` через `scripts/collect.py --port ...` и побайтовая сверка
-   с симуляционным референсом из `data/sim_clean_w32.csv` при том же `SEED`.
+1. Смок-тест тактовой сети и сброса: `LEDR[0]` мигает с периодом ~1.3 с.
+   Визуализация: HEX7 — номер lane (KEY[1] переключает), HEX6…4 — пакеты (live),
+   HEX3…0 — байты (live); LEDG[5:0] — успех по lane, LEDG[8] — done.
+2. UART: после сброса приходят 6 строк `RESULT,...` и `DONE` на 115200 8N1.
+3. Прогон `MODE=0` на 64 пакетах; побайтовая сверка с референсом из симуляции.
 4. Только после этого — кампании `MODE=1..9`.
 
-Пока платы нет, все метрики в `docs/results/` помечены как симуляционные
-или синтетические (Yosys).
+До прошивки все метрики в `docs/results/` являются симуляционными
+(Yosys gate-equivalent) или вендорными статическими из Quartus — но не данными с платы.

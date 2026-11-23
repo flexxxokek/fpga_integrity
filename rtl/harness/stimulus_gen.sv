@@ -23,10 +23,14 @@ module stimulus_gen #(
 );
 
   localparam int unsigned BEAT_BYTES = DATA_WIDTH / 8;
+  // A localparam lets Quartus infer a divide-by-constant network.  Calling
+  // span() inline previously produced a 79 ns combinational divider path.
+  localparam int unsigned SPAN = (LEN_MAX > LEN_MIN) ? (LEN_MAX - LEN_MIN + 1) : 1;
 
   logic [31:0] rng_q;
   logic [31:0] packets_q;
   logic [31:0] remaining_q;
+  logic [7:0] mix_b;  // Quartus 21.1 cannot slice a function call directly
   logic active_q;
 
   function automatic logic [31:0] xs32(input logic [31:0] value);
@@ -38,12 +42,16 @@ module stimulus_gen #(
     return x;
   endfunction
 
-  function automatic logic [31:0] span(input int unsigned lo, input int unsigned hi);
-    if (hi <= lo) begin
-      return 32'd1;
+  // Quartus 21.1 elaborates `%` even when the divisor is 1, which costs
+  // ~79 ns.  Prune the variable-length branch entirely for SPAN == 1.
+  logic [31:0] len_offset;
+  generate
+    if (SPAN == 1) begin : g_len_fixed
+      assign len_offset = 32'd0;
+    end else begin : g_len_random
+      assign len_offset = xs32(rng_q) % SPAN;
     end
-    return hi - lo + 1;
-  endfunction
+  endgenerate
 
   logic [31:0] beat_bytes;
   assign beat_bytes = (remaining_q >= BEAT_BYTES) ? BEAT_BYTES : remaining_q;
@@ -58,10 +66,12 @@ module stimulus_gen #(
   always_comb begin
     m_axis_tdata = '0;
     m_axis_tkeep = '0;
+    mix_b = 8'd0;
     if (active_q) begin
       for (int unsigned i = 0; i < BEAT_BYTES; i++) begin
         if (i < beat_bytes) begin
-          m_axis_tdata[i*8 +: 8] = xs32(rng_q ^ (32'(i) * 32'h9E3779B9))[7:0];
+          mix_b = 8'(xs32(rng_q ^ (32'(i) * 32'h9E3779B9)));
+          m_axis_tdata[i*8 +: 8] = mix_b;
           m_axis_tkeep[i] = 1'b1;
         end
       end
@@ -77,7 +87,7 @@ module stimulus_gen #(
     end else if (!active_q) begin
       if (start && (packets_q < NUM_PACKETS)) begin
         rng_q       <= xs32(rng_q);
-        remaining_q <= LEN_MIN + (xs32(rng_q) % span(LEN_MIN, LEN_MAX));
+        remaining_q <= LEN_MIN + len_offset;
         active_q    <= 1'b1;
       end
     end else if (m_axis_tready) begin

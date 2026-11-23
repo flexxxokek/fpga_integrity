@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Press KEY[0] on the DE2-115 to start a campaign.", flush=True)
 
     with serial.Serial(args.port, args.baud, timeout=1) as link:
+        link.reset_input_buffer()  # discard bytes from a previous firmware
         lines: list[str] = []
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:

@@ -71,8 +71,10 @@ lane, у которых `missed == 0`, LEDG[8] дублирует `done`. Кра
 - [x] Проект собирается в Quartus, timing met (Fmax 19.84 МГц, slack +19.14 нс)
 - [x] `.sof` прошит через JTAG 2026-11-23, `EP4CE115F29`, checksum `0x012942A1`
 - [ ] Мигание LED (heartbeat `LEDR[0]`) после прошивки
-- [ ] UART loopback / получение `RESULT,...` и `DONE`
-- [ ] Стенд: кампания `clean` на 64 пакета, сверка с `data/sim_clean_w32.csv`
+- [x] UART: получены 6 строк `RESULT,...` и `DONE` (115200 8N1)
+- [x] Стенд: кампания `clean` на 64 пакета, все 6 lane совпали с
+  `data/sim_clean_w32.csv` (`data/board_clean_w32.log`); cycles `0x540` для
+  пяти лёгких lane и `0x2840` для SHA-256
 - [ ] Полная кампания; результаты совпадают с референсом из симуляции
 
 ## 7. Решения, принятые на основе платы

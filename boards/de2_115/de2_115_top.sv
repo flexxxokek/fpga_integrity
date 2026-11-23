@@ -38,21 +38,33 @@ module de2_115_top (
   parameter logic [31:0] SEED = 32'h1234_5678;
   parameter bit INCLUDE_SHA  = 1'b1;
 
-  logic rst_n;
-  assign rst_n = KEY[0];
+  // Power-on reset and a short reset pulse on the falling edge of KEY[0].
+  // Using the button level directly can leave the stand held in reset if the
+  // line is not high at configuration time or the button is held down.
+  logic key0_meta, key0_sync;
+  always_ff @(posedge CLOCK_50) begin
+    key0_meta <= KEY[0];
+    key0_sync <= key0_meta;
+  end
+  wire key0_press = key0_sync & ~key0_meta;  // active-low button, falling edge
+
+  logic [19:0] rst_cnt_q;
+  always_ff @(posedge CLOCK_50) begin
+    if (key0_press) rst_cnt_q <= 20'd0;
+    else if (rst_cnt_q != 20'hFFFFF) rst_cnt_q <= rst_cnt_q + 20'd1;
+  end
+  // Assert reset for ~26 ms after power-up or after KEY[0] is pressed.
+  wire rst = (rst_cnt_q < 20'd330000);
 
   // 50 MHz / 4 -> 12.5 MHz.  Bit 1 of the counter toggles every 4 input
   // clocks, giving a 50 % duty cycle without an IP PLL.
   logic [1:0] div_q;
-  always_ff @(posedge CLOCK_50 or negedge rst_n) begin
-    if (!rst_n) div_q <= 2'd0;
-    else        div_q <= div_q + 2'd1;
+  always_ff @(posedge CLOCK_50) begin
+    if (rst) div_q <= 2'd0;
+    else     div_q <= div_q + 2'd1;
   end
   logic clk_std;
   assign clk_std = div_q[1];
-
-  logic rst;
-  assign rst = ~rst_n;
 
   logic start;
   assign start = 1'b1;                 // auto-start one campaign after reset release
@@ -77,7 +89,10 @@ module de2_115_top (
       .clk    (clk_std),
       .rst    (rst),
       .start  (start),
-      .uart_rxd (UART_RXD),
+      // The report formatter uses uart_rxd only as a "host line idle" gate.
+      // Tie it high: the RS-232 transceiver can hold the physical pin low
+      // when no host is transmitting, which would suppress the report.
+      .uart_rxd (1'b1),
       .uart_txd (UART_TXD),
       .done   (done),
       .busy   (busy),

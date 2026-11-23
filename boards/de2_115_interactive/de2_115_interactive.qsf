@@ -1,0 +1,33 @@
+# Interactive hash demo for Terasic DE2-115.
+set_global_assignment -name FAMILY "Cyclone IV E"
+set_global_assignment -name DEVICE EP4CE115F29C7
+set_global_assignment -name TOP_LEVEL_ENTITY de2_115_interactive
+set_global_assignment -name SDC_FILE de2_115_interactive.sdc
+
+set_global_assignment -name SYSTEMVERILOG_FILE de2_115_interactive.sv
+set_global_assignment -name SYSTEMVERILOG_FILE interactive_lane_tx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/integrity_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/parity_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/checksum_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/fletcher_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/adler32_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/crc_engine.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/cores/sha256_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/wrappers/integrity_tx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE uart_rx_16x.sv
+set_global_assignment -name SYSTEMVERILOG_FILE uart_rx_sync.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/uart_rx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/harness/uart_tx.sv
+
+set_location_assignment PIN_Y2 -to CLOCK_50
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to CLOCK_50
+set_location_assignment PIN_G12 -to UART_RXD
+set_location_assignment PIN_G9 -to UART_TXD
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to UART_RXD
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to UART_TXD
+set_location_assignment PIN_G19 -to LEDR[0]
+set_location_assignment PIN_F19 -to LEDR[1]
+set_location_assignment PIN_E19 -to LEDR[2]
+set_instance_assignment -name IO_STANDARD "2.5 V" -to LEDR[*]
+
+set_global_assignment -name LAST_QUARTUS_VERSION "21.1.0 Lite Edition"

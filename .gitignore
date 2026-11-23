@@ -27,6 +27,17 @@ boards/de2_115/*.pin
 boards/de2_115/*.jdi
 boards/de2_115/*.sld
 boards/de2_115/*.done
+boards/de2_115_interactive/output_files/
+boards/de2_115_interactive/incremental_db/
+boards/de2_115_interactive/db/
+boards/de2_115_interactive/*.rpt
+boards/de2_115_interactive/*.summary
+boards/de2_115_interactive/*.sof
+boards/de2_115_interactive/*.pin
+boards/de2_115_interactive/*.jdi
+boards/de2_115_interactive/*.sld
+boards/de2_115_interactive/*.done
+boards/de2_115_interactive/*.smsg
 .Xil/
 *.jou
 *.str

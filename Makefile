@@ -13,6 +13,7 @@ QUARTUS_ROOT ?= /opt/intelFPGA/21.1/quartus
 QUARTUS_SH   ?= $(QUARTUS_ROOT)/bin/quartus_sh
 QUARTUS_PGM  ?= $(QUARTUS_ROOT)/bin/quartus_pgm
 BOARD_DIR    ?= boards/de2_115
+INTERACTIVE_DIR ?= boards/de2_115_interactive
 
 # Simulator-based throughput measurement (ticks per byte).
 SIM_CAMPAIGN ?= clean
@@ -46,7 +47,7 @@ RTL_SOURCES := $(sort $(wildcard rtl/cores/*.sv rtl/wrappers/*.sv rtl/harness/*.
 LINT_COMMON := --lint-only -Wall -Wno-fatal -Irtl/cores
 LINT_TOP    := --top-module exp_harness_top
 
-.PHONY: all lint sim sim-quick cov harness sim-measure sim-measure-all sim-false-rate sim-tag-rate test-false-rate gen-vectors synth cov-report test-report board-build board-program board-report board-capture clean help
+.PHONY: all lint sim sim-quick cov harness sim-measure sim-measure-all sim-false-rate sim-tag-rate test-false-rate gen-vectors synth cov-report test-report board-build board-program board-report board-capture interactive-build interactive-program hash-demo clean help
 
 all: lint sim
 
@@ -67,6 +68,9 @@ help:
 	@echo "make board-report  - render docs/results/board.md from Quartus reports"
 	@echo "make board-program - program the DE2-115 over JTAG (connect the board first)"
 	@echo "make board-capture PORT=/dev/ttyUSB0 - receive UART report and diff with sim"
+	@echo "make interactive-build   - Quartus build of the interactive hash demo"
+	@echo "make interactive-program - flash the interactive hash demo"
+	@echo "make hash-demo PORT=/dev/ttyUSB0 TEXT=... - run interactive demo vs Python"
 	@echo "make gen-vectors   - regenerate HDLen + GF(2) adversarial vector sets"
 	@echo "make clean      - remove simulation builds and caches"
 
@@ -201,6 +205,19 @@ board-program:
 board-capture:
 	@test -n "$(PORT)" || (echo "usage: make board-capture PORT=/dev/ttyUSB0" >&2; exit 1)
 	$(PY) scripts/board_capture.py --port $(PORT) $(if $(BAUD),--baud $(BAUD),)
+
+# Interactive hash demo (separate firmware; reflash to switch back to the stand).
+interactive-build:
+	cd $(INTERACTIVE_DIR) && $(QUARTUS_SH) --flow compile de2_115_interactive
+
+interactive-program:
+	cd $(INTERACTIVE_DIR) && $(QUARTUS_PGM) -m JTAG -o "p;de2_115_interactive.sof@1"
+
+hash-demo:
+	@test -n "$(PORT)" || (echo "usage: make hash-demo PORT=/dev/ttyUSB0 TEXT=..." >&2; exit 1)
+	$(PY) scripts/hash_demo.py --port $(PORT) \
+		$(if $(TEXT),--text "$(TEXT)",) $(if $(HEX),--hex $(HEX),) \
+		$(if $(FILE),--file $(FILE),) $(if $(BAUD),--baud $(BAUD),)
 
 clean:
 	rm -rf sim_build tb/results.xml tb/coverage.dat

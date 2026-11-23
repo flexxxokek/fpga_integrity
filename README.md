@@ -179,6 +179,7 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 | [docs/verification_plan.md](docs/verification_plan.md) | План верификации и критерии готовности |
 | [docs/measurement_plan.md](docs/measurement_plan.md) | Методика измерений на плате и анализа данных |
 | [docs/false_rate.md](docs/false_rate.md) | Научные генераторы искажений и измерение false rate |
+| [docs/interactive_demo.md](docs/interactive_demo.md) | Интерактивная демонстрация хешей: пакет с ПК → FPGA → сравнение с Python |
 | [docs/roadmap.md](docs/roadmap.md) | Этапы работ, зависимости, критерии |
 | [docs/results/synthesis.md](docs/results/synthesis.md) | Статические метрики из Yosys (gate-equivalent, FF) |
 | [docs/results/conclusion.md](docs/results/conclusion.md) | Итоговое сравнение и выводы |

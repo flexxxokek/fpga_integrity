@@ -1,9 +1,10 @@
 // Text report formatter for the UART host link.
 //
 // Emits one line per lane with hexadecimal counters:
-//   RESULT,<lane>,<packets>,<corrupted>,<detected>,<missed>,<false>\n
+//   RESULT,<lane>,<packets>,<corrupted>,<detected>,<missed>,<false>,<bytes>,<cycles>\n
 // followed by DONE\n.  Hexadecimal is used to keep the formatter small; the
 // host script parses it just like the decimal variant in measurement_plan.md.
+// `bytes` and `cycles` are the speed counters used for ticks-per-byte analysis.
 module report_uart #(
     parameter int CLK_FREQ_HZ = 50_000_000,
     parameter int BAUD_RATE   = 115_200
@@ -16,13 +17,15 @@ module report_uart #(
     input  logic [5:0][31:0]  detected_total,
     input  logic [5:0][31:0]  missed_total,
     input  logic [5:0][31:0]  false_total,
+    input  logic [5:0][31:0]  bytes_total,
+    input  logic [5:0][31:0]  cycles_total,
     output logic              uart_txd
 );
 
   localparam logic [1:0] S_IDLE = 2'd0;
   localparam logic [1:0] S_LINE = 2'd1;
   localparam logic [1:0] S_DONE = 2'd2;
-  localparam int unsigned LINE_LEN = 54;
+  localparam int unsigned LINE_LEN = 72;
 
   logic [1:0]  state_q;
   logic [2:0]  lane_q;
@@ -65,8 +68,12 @@ module report_uart #(
         return detected_total[lane];
       7'd36, 7'd37, 7'd38, 7'd39, 7'd40, 7'd41, 7'd42, 7'd43:
         return missed_total[lane];
-      default:
+      7'd45, 7'd46, 7'd47, 7'd48, 7'd49, 7'd50, 7'd51, 7'd52:
         return false_total[lane];
+      7'd54, 7'd55, 7'd56, 7'd57, 7'd58, 7'd59, 7'd60, 7'd61:
+        return bytes_total[lane];
+      default:
+        return cycles_total[lane];
     endcase
   endfunction
 
@@ -86,6 +93,10 @@ module report_uart #(
       return hex_char(value[4 * (7'd43 - pos) +: 4]);
     end else if (pos >= 7'd45 && pos <= 7'd52) begin
       return hex_char(value[4 * (7'd52 - pos) +: 4]);
+    end else if (pos >= 7'd54 && pos <= 7'd61) begin
+      return hex_char(value[4 * (7'd61 - pos) +: 4]);
+    end else if (pos >= 7'd63 && pos <= 7'd70) begin
+      return hex_char(value[4 * (7'd70 - pos) +: 4]);
     end
     case (pos)
       7'd0: return "R";
@@ -101,6 +112,8 @@ module report_uart #(
       7'd26: return ",";
       7'd35: return ",";
       7'd44: return ",";
+      7'd53: return ",";
+      7'd62: return ",";
       default: return "\n";
     endcase
   endfunction

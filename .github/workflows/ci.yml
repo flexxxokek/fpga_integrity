@@ -30,6 +30,12 @@ jobs:
       - name: Run cocotb regression
         run: make sim-quick
 
+      - name: Test scientific false-rate generators
+        run: make test-false-rate
+
+      - name: Smoke false-rate model campaign
+        run: python scripts/false_rate_suite.py --generator gilbert_elliott --packets 200 --length 32 --seed 42 --out data/ci_false_rate.csv
+
       - name: Upload regression results
         if: always()
         uses: actions/upload-artifact@v4

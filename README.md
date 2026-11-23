@@ -105,6 +105,11 @@ make sim-quick  # быстрый поднабор для локальной ит
 make cov        # регрессия + покрытие Verilator
 make harness    # только симуляция стенда
 
+# Сбор данных в симуляторе (скорость по тикам для каждого метода):
+make sim-measure         # DATA_WIDTH=32 по умолчанию
+make sim-measure-all     # DATA_WIDTH=8 и 32, один сводный отчёт
+make sim-false-rate      # научные генераторы искажений: false/undetected rate
+
 # Отдельные режимы регрессии:
 python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick] [--only NAME]
 ```
@@ -122,6 +127,20 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 метрики: латентность, пропускная способность, статистика обнаружения ошибок.
 Статические метрики (LUT/FF, Fmax) снимаются отдельными сборками каждого ядра.
 Методика: [docs/measurement_plan.md](docs/measurement_plan.md).
+
+Сбор данных в симуляторе запускается командой `make sim-measure-all`: она
+прогоняет детерминированную кампанию на шинах 8 и 32 бит, передаёт строки
+`RESULT` через `scripts/collect.py` в `data/*.csv` и строит таблицу
+`docs/results/summary.md` с метриками `ticks_per_byte`, `bytes_per_tick` и
+`ticks_per_packet` для всех шести методов. Текущие результаты — в
+[docs/results/summary.md](docs/results/summary.md).
+
+Для измерения **false/undetected rate** используются генераторы с научной
+методикой: модель пакетных ошибок Gilbert–Elliott (Gilbert 1960, Elliott 1963)
+и адверсариальные векторы необнаруженных ошибок Купмана (HDLen, ICNP 2002).
+Запуск: `make sim-false-rate`, отчёт —
+[docs/results/false_rate/summary.md](docs/results/false_rate/summary.md).
+Методика, DOI и ссылки: [docs/false_rate.md](docs/false_rate.md).
 
 ## План работ
 
@@ -148,6 +167,7 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 | [docs/architecture.md](docs/architecture.md) | Архитектура ядер, обёрток и стенда; board-абстракция |
 | [docs/verification_plan.md](docs/verification_plan.md) | План верификации и критерии готовности |
 | [docs/measurement_plan.md](docs/measurement_plan.md) | Методика измерений на плате и анализа данных |
+| [docs/false_rate.md](docs/false_rate.md) | Научные генераторы искажений и измерение false rate |
 | [docs/roadmap.md](docs/roadmap.md) | Этапы работ, зависимости, критерии |
 | [docs/board.md](docs/board.md) | Шаблон фиксации характеристик платы (заполняется при получении) |
 | [docs/decisions.md](docs/decisions.md) | Журнал принятых решений |
@@ -155,6 +175,12 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 
 ## Литература
 
+- E. N. Gilbert, *Capacity of a Burst-Noise Channel*, BSTJ 39(5), 1960 —
+  https://doi.org/10.1002/j.1538-7305.1960.tb03959.x
+- E. O. Elliott, *Estimates of Error Rates for Codes on Burst-Noise Channels*,
+  BSTJ 42(5), 1963 — https://doi.org/10.1002/j.1538-7305.1963.tb00955.x
+- P. Koopman, *32-Bit CRC Codes for Internet Applications*, ICNP 2002 —
+  https://doi.org/10.1109/ICNP.2002.1115615 · https://users.ece.cmu.edu/~koopman/crc/
 - IEEE 802.3, Clause 3.2.9 — Frame Check Sequence
 - R. Williams, *A Painless Guide to CRC Error Detection Algorithms*
 - RevEng CRC catalogue — https://reveng.sourceforge.io/crc-catalogue/

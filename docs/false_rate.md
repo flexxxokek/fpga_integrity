@@ -1,0 +1,167 @@
+# Измерение false rate: научные генераторы искажений
+
+## 1. Что измеряется
+
+В алгоритмах контроля целостности под *false rate* обычно понимают вероятность
+**необнаруженной ошибки** — долю искажённых пакетов, которые прошли проверку:
+
+```
+undetected_rate = missed / corrupted      (P_undetected, false negative)
+detection_rate  = detected / corrupted
+false_rate      = false / packets         (ложные срабатывания на чистом пакете)
+```
+
+Счётчики `corrupted`, `detected`, `missed`, `false` формируются в стенде
+(`rtl/harness/integrity_lane.sv`), а метрики вычисляются в `scripts/analyze.py`.
+В описанных ниже кампаниях искажается только полезная нагрузка, тег не трогается,
+поэтому `false_rate = 0` для всех алгоритмов; главная сравниваемая метрика —
+`undetected_rate`.
+
+## 2. Генератор 1: модель пакетных ошибок Gilbert–Elliott
+
+Двухсостояная марковская модель канала с пакетными (burst) ошибками —
+классический инструмент оценки помехоустойчивости. Состояние `G` (good) имеет
+вероятность перехода в `B` (bad) `p_gb`, состояние `B` возвращается в `G` с
+вероятностью `p_bg`; средняя длина пачки ошибок `1/p_bg`, средний интервал между
+пачками `1/p_gb`. В состоянии `B` каждый бит искажается с вероятностью `h`
+(в проекте `h = 1`, что соответствует исходному примеру Гилберта).
+
+**Первоисточники:**
+
+- E. N. Gilbert, *Capacity of a Burst-Noise Channel*, Bell System Technical
+  Journal, 39(5):1253–1265, 1960.
+  https://doi.org/10.1002/j.1538-7305.1960.tb03959.x
+- E. O. Elliott, *Estimates of Error Rates for Codes on Burst-Noise Channels*,
+  Bell System Technical Journal, 42(5):1977–1997, 1963.
+  https://doi.org/10.1002/j.1538-7305.1963.tb00955.x
+- Краткое описание модели: https://en.wikipedia.org/wiki/Burst_error
+
+**Интеграция:**
+
+- `rtl/harness/error_injector.sv`, `MODE = 5`. Параметры `GE_P_GB_Q16`,
+  `GE_P_BG_Q16`, `GE_H_Q16` задают вероятности в формате Q16. Состояние марковской
+  цепи сохраняется между пакетами, маска ошибок строится по битам первого beat.
+- `scripts/false_rate_suite.py`, класс `GilbertElliott` — эталонная модель на
+  Python; используется для model-level кампаний и проверки статистики.
+- `tb/test_false_rate_suite.py` — тесты детерминированности и средней длины
+  пачки (должна соответствовать `1/p_bg`).
+
+## 3. Генератор 2: векторы необнаруженных ошибок Купмана (HDLen)
+
+Филип Купман (Carnegie Mellon University) опубликовал таблицы максимальных
+длин кодовых слов для заданного кодового расстояния (Hamming Distance, HD)
+CRC-полиномов и инструмент `hdlen`, который
+методом исчерпывающего поиска находит **минимальные по весу кодовые слова**,
+опровергающие заявленный HD на заданной длине сообщения. Такое кодовое слово —
+готовый адверсариальный тег: если его биты переключить в нулевом пакете, CRC не
+изменится, то есть ошибка останется необнаруженной.
+
+**Первоисточники:**
+
+- P. Koopman, *32-Bit Cyclic Redundancy Codes for Internet Applications*,
+  Proc. IEEE International Conference on Network Protocols (ICNP), 2002.
+  https://doi.org/10.1109/ICNP.2002.1115615
+  (именно по этой работе CRC-32C выбран для iSCSI/SCTP)
+- База данных и инструмент: https://users.ece.cmu.edu/~koopman/crc/
+  (программа: http://users.ece.cmu.edu/~koopman/crc/hdlen.tar.gz,
+  описание формата: http://users.ece.cmu.edu/~koopman/crc/hdlen.html)
+- Обзор теории: R. Williams, *A Painless Guide to CRC Error Detection
+  Algorithms*, 1993 — https://www.zlib.net/crc_v3.txt
+
+**Интеграция:**
+
+- `tb/vectors/koopman_hdlen_examples.txt` — дословно сохранённый вывод `hdlen`
+  v2.1 для пяти полиномов проекта (Koopman implicit +1 notation: `0x83`,
+  `0x8810`, `0xc002`, `0x82608edb`, `0x8f6e37a0`).
+- `scripts/gen_koopman_vectors.py` — конвертирует примеры в битовые маски
+  проекта (FCS-биты решаются линейной системой над GF(2) по эталонной модели);
+  каждый вектор проверяется на нулевой синдром.
+- `tb/vectors/koopman_hd.json` — 8 готовых векторов (с метаданными и ссылкой).
+- `scripts/gen_zero_syndrome.py` + `tb/vectors/koopman_random.json` — **второй
+  вариант**: 1000 детерминированно сгенерированных zero-syndrome векторов
+  (по 200 на полином). Для случайной маски данных биты FCS решаются линейной
+  системой над GF(2) по эталонной модели; каждый вектор проверяется на нулевой
+  синдром и на то, что SHA-256 его ловит. Это *производные* векторы, а не
+  независимый исчерпывающий поиск HDLen — в отчётах они идут отдельной кампанией
+  `koopman_random`. Перегенерация: `make gen-vectors`.
+- `tb/test_false_rate_suite.py` — тест, что каждый вектор действительно не
+  обнаруживается целевым CRC и обнаруживается SHA-256.
+
+## 4. Запуск
+
+```bash
+make sim-false-rate
+```
+
+Команда:
+
+1. прогоняет кампанию Gilbert–Elliott в RTL-стенде (Verilator, `DATA_WIDTH=32`,
+   256 пакетов, средняя пачка 8 бит) и сохраняет строки `RESULT` в
+   `data/sim_gilbert_elliott.log`;
+2. собирает `data/sim_gilbert_elliott.csv` через `scripts/collect.py`;
+3. запускает обе model-level кампании (`data/model_gilbert_elliott.csv`,
+   `data/model_koopman.csv`);
+4. строит сводку `docs/results/false_rate/summary.md`.
+
+Параметры кампании (`Makefile`): `SIM_FAULT_PACKETS`, `SIM_FAULT_LEN_MAX`,
+`SIM_FAULT_P_GB` (Q16), `SIM_FAULT_P_BG` (Q16), `SIM_FAULT_SEED`.
+
+## 5. Текущие результаты
+
+| Кампания | Метод | Искажено | Не обнаружено | undetected_rate |
+|---|---|---:|---:|---:|
+| Gilbert–Elliott (RTL, 256 пак.) | parity | 11 | 8 | 72.7% |
+| Gilbert–Elliott (RTL, 256 пак.) | checksum16 / fletcher16 / adler32 / crc32 / sha256 | 11 | 0 | 0% |
+| Gilbert–Elliott (модель, 256 пак.) | parity | 19 | 9 | 47.4% |
+| Gilbert–Elliott (модель, 256 пак.) | остальные | 19 | 0 | 0% |
+| Koopman HDLen (8 векторов) | parity | 8 | 7 | 87.5% |
+| Koopman HDLen (8 векторов) | crc32 | 8 | 3 | 37.5% |
+| Koopman HDLen (8 векторов) | остальные | 8 | 0 | 0% |
+
+Интерпретация: одиночный бит чётности слеп к чётному числу искажённых бит,
+поэтому на burst-канале он пропускает значительную долю ошибок. Адверсариальные
+векторы Купмана целенаправленно попадают в ядро CRC-32: три из восьми векторов
+построены именно под его полином и потому не обнаруживаются им, но обнаруживаются
+другими методами. Это ожидаемое поведение, а не ошибка RTL.
+
+> Примечание: выборка из 8 адверсариальных векторов мала для оценок вероятности;
+> она предназначена для проверки корректности CRC-ядер по опубликованным
+> гарантиям HD, а не для статистического вывода.
+
+## 6. Метрика Pud и новые источники (обновление)
+
+`undetected_rate` зависит от BER и длины кодового слова, поэтому для сравнения
+алгоритмов используется **Pud** — probability of undetected error:
+
+```
+Pud(BER, n) = Σ_m HW_m · C(n, m) · BER^m · (1-BER)^(n-m)
+HW_m        = missed_m / corrupted_m      (доля необнаруженных m-битовых ошибок)
+```
+
+Счётчики `corrupted_weights` / `missed_weights` (4 восьмибитных ведра: m=1, 2, 3, ≥4)
+формируются в RTL (`error_injector.flip_count` → `integrity_lane`) и в model-level
+генераторе. BER и длина кодового слова пишутся в метаданные CSV. Доверительные
+интервалы — Вильсона 95%, стоп-критерий кампании — ≥1000 событий (параметр
+`--min-missed-events`). Итоговая таблица: `docs/results/false_rate/pud.md`
+(`scripts/pud_eval.py`).
+
+**Дополнительные источники методики:**
+
+- P. Koopman, отчёт FAA TC-14-49, *Selection of CRC and Checksum Algorithms to
+  Ensure Critical Data Integrity*, 2015 —
+  https://users.ece.cmu.edu/~koopman/pubs/faa15_tc-14-49.pdf
+  (критерии HD/HW/Pud/burst/minimal k-bit undetected/data dependence; протокол
+  Монте-Карло: 10⁹–10¹² испытаний, ≥1000 необнаруженных событий на длину).
+- T. Maxino, P. Koopman, *The Effectiveness of Checksums for Embedded Control
+  Networks*, IEEE TDSC 6(1), 2009, doi:10.1109/TDSC.2007.70216 —
+  полный перебор 1–3-битовых ошибок, burst и паттерны данных.
+- P. Koopman, arXiv:2302.13432 (2023) и arXiv:2304.13496 (2023/24) —
+  Pud-оценки, модули 253/65525, Koopman checksum.
+- J. Fitzgerald et al., *Looking for Errors TCP Misses*, NSF 2025 —
+  https://par.nsf.gov/servlets/purl/10647724 (26 ПБ, инжекция «ноль/инверсия/
+  рандомизация всех байт», разделение источников ошибок, требование 1000+ событий).
+- P. Koopman, блог 2024: https://checksumcrc.blogspot.com/2024/03/why-to-avoid-hash-algorithms-if-what.html
+  (хеш ≈ HD=2 при случайных битовых ошибках).
+
+Кампании запускаются через `make sim-false-rate` (включая `hd_sweep` и Pud-отчёт);
+регрессия генераторов — `make test-false-rate`.

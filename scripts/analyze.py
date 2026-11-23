@@ -8,6 +8,9 @@ Input CSV files are produced by ``scripts/collect.py`` and use the long format:
 Outputs:
     <out>/summary.csv   machine-readable aggregate
     <out>/summary.md    Markdown table for docs
+
+Alongside detection rates, the summary derives speed metrics from the `bytes`
+and `cycles` counters: bytes_per_tick, ticks_per_byte and ticks_per_packet.
     <out>/*.png         plots when matplotlib is available
 
 Examples:
@@ -20,6 +23,7 @@ from __future__ import annotations
 import argparse
 import csv
 import glob
+import math
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -30,8 +34,20 @@ METRIC_ORDER = [
     "detected",
     "missed",
     "false",
+    "bytes",
+    "cycles",
     "detection_rate",
+    "undetected_rate",
+    "undetected_rate_lo",
+    "undetected_rate_hi",
+    "pud",
+    "hw1",
+    "hw2",
+    "hw3",
     "false_rate",
+    "bytes_per_tick",
+    "ticks_per_byte",
+    "ticks_per_packet",
 ]
 
 
@@ -80,10 +96,28 @@ def as_float(value: str) -> float | None:
         return None
 
 
+def buckets(word: float) -> list[float]:
+    """Unpack four 8-bit Hamming-weight buckets from a packed counter."""
+    raw = int(word)
+    return [(raw >> (8 * m)) & 0xFF for m in range(4)]
+
+
+def wilson(k: float, n: float, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson interval for a binomial proportion."""
+    if n <= 0:
+        return 0.0, 1.0
+    p = k / n
+    denom = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return max(0.0, centre - margin), min(1.0, centre + margin)
+
+
 def aggregate(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, float]]:
     values: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(
         lambda: defaultdict(list)
     )
+    metadata: dict[tuple[str, str], dict[str, str]] = defaultdict(dict)
     for row in rows:
         algo = row.get("algo") or "unknown"
         campaign = row.get("campaign") or "default"
@@ -91,6 +125,10 @@ def aggregate(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, flo
         number = as_float(row.get("value", ""))
         if number is not None:
             values[(algo, campaign)][metric].append(number)
+        for field in ("ber", "codeword_bits", "data_pattern", "fault_source"):
+            text = row.get(field) or ""
+            if text and field not in metadata[(algo, campaign)]:
+                metadata[(algo, campaign)][field] = text
 
     summary: dict[tuple[str, str], dict[str, float]] = {}
     for key, metrics in values.items():
@@ -98,9 +136,50 @@ def aggregate(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, flo
         counted = entry.get("detected", 0.0) + entry.get("missed", 0.0)
         if counted > 0:
             entry["detection_rate"] = entry.get("detected", 0.0) / counted
+        corrupted = entry.get("corrupted", 0.0)
+        missed = entry.get("missed", 0.0)
+        if corrupted > 0:
+            # Probability that a corrupted packet passes the check: the
+            # "false rate" of an integrity check (also called P_undetected).
+            entry["undetected_rate"] = missed / corrupted
+            low, high = wilson(missed, corrupted)
+            entry["undetected_rate_lo"] = low
+            entry["undetected_rate_hi"] = high
         packets = entry.get("packets", 0.0)
         if packets > 0 and "false" in entry:
             entry["false_rate"] = entry["false"] / packets
+
+        # Koopman-style Pud: P(undetected | BER, codeword length), estimated
+        # from the per-weight (Hamming weight) miss counts.  HWi = missed_i /
+        # corrupted_i; for small BER the m=HD term dominates the binomial sum.
+        if "corrupted_weights" in entry and "missed_weights" in entry:
+            cw = buckets(entry["corrupted_weights"])
+            mw = buckets(entry["missed_weights"])
+            ber = as_float(metadata.get(key, {}).get("ber", ""))
+            bits = as_float(metadata.get(key, {}).get("codeword_bits", ""))
+            if ber is not None and bits is not None and 0 < ber < 1 and bits >= 1:
+                n = int(bits)
+                pud = 0.0
+                for index in range(4):
+                    if cw[index] <= 0:
+                        continue
+                    hw = mw[index] / cw[index]
+                    if index < 3:
+                        entry[f"hw{index + 1}"] = hw
+                    m = index + 1
+                    pud += hw * math.comb(n, m) * ber ** m * (1 - ber) ** (n - m)
+                entry["pud"] = pud
+
+        # Speed metrics: `cycles` counts the ticks the lane was busy with the
+        # stream, `bytes` is the payload delivered by the RX side.
+        cycles = entry.get("cycles", 0.0)
+        byte_count = entry.get("bytes", 0.0)
+        if cycles > 0:
+            if byte_count > 0:
+                entry["bytes_per_tick"] = byte_count / cycles
+                entry["ticks_per_byte"] = cycles / byte_count
+            if packets > 0:
+                entry["ticks_per_packet"] = cycles / packets
         summary[key] = entry
     return summary
 
@@ -149,8 +228,10 @@ def write_markdown(
             value = entry.get(column)
             if value is None:
                 row.append("")
-            elif column.endswith("_rate"):
-                row.append(f"{100.0 * value:.1f}%")
+            elif column == "pud":
+                row.append(f"{value:.3g}")
+            elif column.endswith("_rate") or column.endswith("_lo") or column.endswith("_hi"):
+                row.append(f"{100.0 * value:.2f}%")
             else:
                 row.append(f"{value:.4g}")
         lines.append("| " + " | ".join(row) + " |")
@@ -176,7 +257,8 @@ def write_plots(
     campaigns = sorted({campaign for _, campaign in summary})
     algos = sorted({algo for algo, _ in summary})
 
-    for metric in ("detection_rate", "false_rate", "packets"):
+    for metric in ("detection_rate", "undetected_rate", "pud", "false_rate",
+                   "packets", "ticks_per_byte"):
         if metric not in columns:
             continue
         fig, ax = plt.subplots(figsize=(max(6, 1.4 * len(algos)), 4))

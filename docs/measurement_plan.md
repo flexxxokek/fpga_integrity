@@ -14,9 +14,10 @@
 
 | Метрика | Как измеряется |
 |---------|----------------|
-| Пропускная способность | байты / такты между первым и последним beat (backpressure выключен) |
+| Пропускная способность | байты / такты: счётчики `bytes` и `cycles` на lane (`bytes_per_tick`, `ticks_per_byte`) |
 | Латентность генерации/проверки | счётчики тактов от `tlast` входа до `tag_valid`/`tag_error` |
-| Обнаружение ошибок | счётчики TP / FN / FP на кампанию |
+| Обнаружение ошибок | счётчики TP / FN / FP на кампанию; `undetected_rate = missed / corrupted`, `false_rate = false / packets` |
+| Научные генераторы искажений | Gilbert–Elliott (MODE=5 в RTL) и адверсариальные векторы HDLen — [docs/false_rate.md](false_rate.md) |
 | Накладные расходы тега | `TAG_BYTES` на пакет |
 
 ## 2. Методика статических измерений
@@ -44,6 +45,11 @@
 Счётчики на lane: `packets_total`, `packets_corrupted`, `errors_detected` (TP),
 `errors_missed` (FN), `false_alarms` (FP), `cycles`, `bytes`, `latency_sum/max`.
 
+`cycles` — такты, в которых lane занят обработкой потока (приём beat,
+финализация тега в TX/RX, выдача пакета). Простои, когда широковещательный
+регистр ждёт готовности другой lane, не учитываются: так скорость каждого
+метода измеряется независимо от самого медленного соседа в стенде.
+
 ## 4. Протокол обмена с хостом
 
 Текстовый, построчный (UART, по умолчанию 115200 8N1):
@@ -60,15 +66,32 @@
 наравне с базовым протоколом:
 
 ```
-RESULT,<lane>,<packets>,<corrupted>,<detected>,<missed>,<false>
+RESULT,<lane>,<packets>,<corrupted>,<detected>,<missed>,<false>,<bytes>,<cycles>
 DONE
 ```
+
+Поля `bytes` и `cycles` несут метрики скорости; `collect.py` понимает как
+8-символьные hex-поля от `report_uart`, так и десятичные поля старых логов.
+В симуляции тест `tb/test_harness.py` пишет те же строки в файл из переменной
+окружения `SIM_REPORT_LOG`, не дожидаясь UART.
 
 ## 5. Сбор и анализ данных
 
 1. `scripts/collect.py` — приём строк по UART → `data/<date>_<board>.csv`.
 2. `scripts/parse_reports.py` — статические метрики из отчётов САПР → CSV.
-3. `scripts/analyze.py` — таблицы и графики → `docs/results/`.
+3. `scripts/analyze.py` — таблицы и графики → `docs/results/`; дополнительно
+   вычисляет `bytes_per_tick`, `ticks_per_byte` и `ticks_per_packet`.
+
+До появления платы тот же конвейер запускается на симуляторе:
+
+```bash
+make sim-measure-all   # кампании clean для DATA_WIDTH=8 и 32, seed 0x12345678
+# или одна ширина:
+make sim-measure SIM_WIDTH=32
+```
+
+Результаты: `data/sim_clean_w{8,32}.log` (строки `RESULT`),
+`data/sim_clean_w{8,32}.csv` и сводная таблица `docs/results/summary.md`.
 
 В шапке каждого набора данных: git-хэш, seed, параметры кампаний, плата, САПР.
 Результаты на плате сверяются с референсом из симуляции (должны совпадать).

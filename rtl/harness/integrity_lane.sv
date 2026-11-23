@@ -21,7 +21,10 @@ module integrity_lane #(
     // error injection on the TX -> RX link
     parameter int  MODE            = 0,
     parameter int  BURST_LEN       = 8,
-    parameter logic [31:0] ERR_SEED = 32'h5
+    parameter logic [31:0] ERR_SEED = 32'h5,
+    parameter int  GE_P_GB_Q16     = 8,
+    parameter int  GE_P_BG_Q16     = 8192,
+    parameter int  GE_H_Q16        = 65535
 ) (
     input  logic                    clk,
     input  logic                    rst,
@@ -35,7 +38,11 @@ module integrity_lane #(
     output logic [31:0]             detected_total,
     output logic [31:0]             missed_total,
     output logic [31:0]             false_total,
-    output logic [31:0]             bytes_total
+    output logic [31:0]             bytes_total,
+    output logic [31:0]             cycles_total,
+    // Per-weight counters: four 8-bit buckets [m=1, m=2, m=3, m>=4].
+    output logic [31:0]             corrupted_weights,
+    output logic [31:0]             missed_weights
 );
 
   localparam int unsigned BEAT_BYTES = DATA_WIDTH / 8;
@@ -53,6 +60,7 @@ module integrity_lane #(
   logic                    link_tready;
   logic                    link_tlast;
   logic                    link_corrupt;
+  logic [2:0]              link_flip_count;
 
   /* verilator lint_off UNUSEDSIGNAL */
   logic [DATA_WIDTH-1:0]   out_tdata;
@@ -62,16 +70,29 @@ module integrity_lane #(
   logic                    out_tag_valid;
   logic                    out_tag_error;
 
-  // Small per-packet corruption flag queue.
+  // Small per-packet corruption flag and injection-weight queue.
   logic [3:0] corrupt_fifo;
+  logic [2:0] weight_fifo[0:3];
   logic [1:0] fifo_wr;
   logic [1:0] fifo_rd;
   logic [2:0] fifo_count;
 
   logic [7:0] out_bytes;
   logic       out_corrupt;
+  logic [2:0] out_weight;
   logic       pkt_corrupt_q;
   logic       tag_phase_q;
+
+  logic       tx_busy;
+  logic       rx_busy;
+  logic       lane_busy;
+
+  // Cycles during which this lane is actually engaged with the stream.  Idle
+  // cycles spent waiting for another lane (the broadcast holds a beat until
+  // every lane is ready) are excluded, so the counter reflects the cost of
+  // this particular algorithm rather than the slowest lane in the stand.
+  assign lane_busy = (s_axis_tvalid && s_axis_tready) || tx_tvalid || tx_busy ||
+                     link_tvalid || rx_busy || out_tvalid;
 
   /* verilator lint_off PINCONNECTEMPTY */
   integrity_tx #(
@@ -87,12 +108,14 @@ module integrity_lane #(
       .m_axis_tdata(tx_tdata), .m_axis_tkeep(tx_tkeep),
       .m_axis_tvalid(tx_tvalid), .m_axis_tready(tx_tready),
       .m_axis_tlast(tx_tlast),
-      .tag_value(), .tag_valid(), .busy()
+      .tag_value(), .tag_valid(), .busy(tx_busy)
   );
 
   error_injector #(
       .DATA_WIDTH(DATA_WIDTH), .MODE(MODE), .BURST_LEN(BURST_LEN),
-      .SEED(ERR_SEED)
+      .SEED(ERR_SEED),
+      .GE_P_GB_Q16(GE_P_GB_Q16), .GE_P_BG_Q16(GE_P_BG_Q16),
+      .GE_H_Q16(GE_H_Q16)
   ) u_err (
       .clk, .rst,
       .s_axis_tdata(tx_tdata), .s_axis_tkeep(tx_tkeep),
@@ -101,7 +124,8 @@ module integrity_lane #(
       .enable(!tag_phase_q),
       .m_axis_tdata(link_tdata), .m_axis_tkeep(link_tkeep),
       .m_axis_tvalid(link_tvalid), .m_axis_tready(link_tready),
-      .m_axis_tlast(link_tlast), .corrupt(link_corrupt)
+      .m_axis_tlast(link_tlast), .corrupt(link_corrupt),
+      .flip_count(link_flip_count)
   );
 
   integrity_rx #(
@@ -118,7 +142,7 @@ module integrity_lane #(
       .m_axis_tdata(out_tdata), .m_axis_tkeep(out_tkeep),
       .m_axis_tvalid(out_tvalid), .m_axis_tready(1'b1), .m_axis_tlast(out_tlast),
       .tag_value(), .tag_valid(out_tag_valid), .tag_error(out_tag_error),
-      .busy()
+      .busy(rx_busy)
   );
   /* verilator lint_on UNUSEDSIGNAL */
   /* verilator lint_on PINCONNECTEMPTY */
@@ -133,6 +157,7 @@ module integrity_lane #(
   end
 
   assign out_corrupt = corrupt_fifo[fifo_rd];
+  assign out_weight  = weight_fifo[fifo_rd];
 
   always_ff @(posedge clk) begin
     if (rst) begin
@@ -142,13 +167,22 @@ module integrity_lane #(
       missed_total    <= 32'd0;
       false_total     <= 32'd0;
       bytes_total     <= 32'd0;
+      cycles_total    <= 32'd0;
+      corrupted_weights <= 32'd0;
+      missed_weights    <= 32'd0;
       corrupt_fifo    <= 4'd0;
+      for (int unsigned i = 0; i < 4; i++) begin
+        weight_fifo[i] <= 3'd0;
+      end
       fifo_wr         <= 2'd0;
       fifo_rd         <= 2'd0;
       fifo_count      <= 3'd0;
       pkt_corrupt_q   <= 1'b0;
       tag_phase_q     <= 1'b0;
     end else begin
+      if (lane_busy) begin
+        cycles_total <= cycles_total + 32'd1;
+      end
       // The TX emits the payload last beat and the tag last beat with tlast;
       // toggle on each one to know when the link carries tag data.
       if (tx_tvalid && tx_tready && tx_tlast) begin
@@ -158,6 +192,7 @@ module integrity_lane #(
       // one flag per packet when its trailing tag has been accepted.
       if (link_tvalid && link_tready && link_tlast && !tag_phase_q) begin
         corrupt_fifo[fifo_wr] <= pkt_corrupt_q || link_corrupt;
+        weight_fifo[fifo_wr]  <= link_flip_count;
         fifo_wr <= fifo_wr + 2'd1;
         if (fifo_count != 3'd4) begin
           fifo_count <= fifo_count + 3'd1;
@@ -172,11 +207,17 @@ module integrity_lane #(
         if (out_tlast) begin
           packets_total <= packets_total + 32'd1;
           if (out_corrupt) begin
+            automatic int unsigned bucket =
+                (out_weight >= 3'd4) ? 3 : (out_weight == 0 ? 0 : int'(out_weight) - 1);
             corrupted_total <= corrupted_total + 32'd1;
+            corrupted_weights[8*bucket +: 8] <=
+                corrupted_weights[8*bucket +: 8] + 8'd1;
             if (out_tag_error) begin
               detected_total <= detected_total + 32'd1;
             end else begin
               missed_total <= missed_total + 32'd1;
+              missed_weights[8*bucket +: 8] <=
+                  missed_weights[8*bucket +: 8] + 8'd1;
             end
           end else if (out_tag_error) begin
             false_total <= false_total + 32'd1;

@@ -175,6 +175,9 @@ def build_and_test(
     )
 
     env = {"PYTHONPATH": str(TB), "ALGO": str(full_params.get("ALGO", 0))}
+    for key in ("SIM_REPORT_LOG", "CAMPAIGN"):
+        if key in os.environ:
+            env[key] = os.environ[key]
     for key, value in full_params.items():
         if isinstance(value, bool):
             env[f"TEST_{key}"] = "1" if value else "0"
@@ -233,32 +236,37 @@ def main():
     failures = []
     for mode in modes:
         if mode == "harness":
+            harness_defaults = {
+                "NUM_PACKETS": 16,
+                "LEN_MIN": 0,
+                "LEN_MAX": 64,
+                "SEED": 0x12345678,
+                "BURST_LEN": 8,
+                "GE_P_GB_Q16": 8,
+                "GE_P_BG_Q16": 8192,
+                "GE_H_Q16": 65535,
+                "INCLUDE_SHA": 1,
+                "ENABLE_UART": 0,
+            }
+            # Allow campaign parameters to be overridden for measurement runs.
+            for key in harness_defaults:
+                if key in os.environ:
+                    harness_defaults[key] = int(os.environ[key], 0)
             harness_cases = [
-                (
-                    "harness_clean",
-                    {
-                        "NUM_PACKETS": 16,
-                        "LEN_MIN": 0,
-                        "LEN_MAX": 64,
-                        "SEED": 0x12345678,
-                        "MODE": 0,
-                        "INCLUDE_SHA": 1,
-                        "ENABLE_UART": 0,
-                    },
-                ),
+                ("harness_clean", {**harness_defaults, "MODE": 0}),
                 (
                     "harness_single_bit",
-                    {
-                        "NUM_PACKETS": 16,
-                        "LEN_MIN": 0,
-                        "LEN_MAX": 64,
-                        "SEED": 0x12345678,
-                        "MODE": 1,
-                        "INCLUDE_SHA": 1,
-                        "ENABLE_UART": 0,
-                    },
+                    {**harness_defaults, "MODE": int(os.environ.get("MODE", "1"))},
                 ),
             ]
+            # The burst-noise campaign is opt-in: its default parameters are
+            # tuned by the caller (see `make sim-false-rate`).
+            fault_mode = os.environ.get("MODE", "0")
+            if fault_mode in ("5", "6", "7", "8"):
+                harness_cases.append(
+                    (f"harness_fault_mode{fault_mode}",
+                     {**harness_defaults, "MODE": int(fault_mode)})
+                )
             for name, params in harness_cases:
                 if args.only and args.only not in name:
                     continue

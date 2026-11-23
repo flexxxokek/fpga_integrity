@@ -35,6 +35,7 @@
 | Directed | известные векторы из spec.md; пустой пакет; 1 байт; длины W−1, W, W+1; все паттерны `tkeep` на последнем слове; back-to-back пакеты; сброс посреди пакета |
 | Constrained-random | ≥ 1000 пакетов на конфигурацию: длины 0…2048, случайные паузы `tvalid`, случайный backpressure `tready` |
 | Error-кампании | clean; single-bit; burst длиной 1…40 бит; byte-swap; zero-insert — идентичные искажения для всех алгоритмов |
+| Научные генераторы | Gilbert–Elliott burst channel (RTL MODE=5, модель в `scripts/false_rate_suite.py`) и векторы HDLen Купмана (`tb/vectors/koopman_hd.json`) — [docs/false_rate.md](false_rate.md) |
 | Протокол | ассерты AXI-Stream (стабильность сигналов при stall), совместимые с Verilator |
 | Покрытие | покрытие строк/переключений Verilator; функциональное (длина × keep × stall) — опционально |
 

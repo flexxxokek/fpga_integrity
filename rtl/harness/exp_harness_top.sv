@@ -12,6 +12,9 @@ module exp_harness_top #(
     parameter logic [31:0] SEED = 32'h1234_5678,
     parameter int  MODE         = 0,
     parameter int  BURST_LEN    = 8,
+    parameter int  GE_P_GB_Q16  = 8,
+    parameter int  GE_P_BG_Q16  = 8192,
+    parameter int  GE_H_Q16     = 65535,
     parameter bit  INCLUDE_SHA  = 1'b1,
     parameter bit  ENABLE_UART  = 1'b0,
     parameter int  CLK_FREQ_HZ  = 50_000_000,
@@ -29,7 +32,10 @@ module exp_harness_top #(
     output logic [5:0][31:0] detected_total,
     output logic [5:0][31:0] missed_total,
     output logic [5:0][31:0] false_total,
-    output logic [5:0][31:0] bytes_total
+    output logic [5:0][31:0] bytes_total,
+    output logic [5:0][31:0] cycles_total,
+    output logic [5:0][31:0] corrupted_weights,
+    output logic [5:0][31:0] missed_weights
 );
 
   localparam int unsigned LANES = INCLUDE_SHA ? 6 : 5;
@@ -48,6 +54,9 @@ module exp_harness_top #(
   logic [31:0] l_missed[0:5];
   logic [31:0] l_false[0:5];
   logic [31:0] l_bytes[0:5];
+  logic [31:0] l_cycles[0:5];
+  logic [31:0] l_cw[0:5];
+  logic [31:0] l_mw[0:5];
 
   // Broadcast register: one beat is held until every lane has accepted it,
   // so no lane can receive a beat twice or see a different stream.
@@ -104,7 +113,9 @@ module exp_harness_top #(
   integrity_lane #(
       .DATA_WIDTH(DATA_WIDTH), .ALGO(0), .TAG_WIDTH(1),
       .PARITY_ODD(1'b0),
-      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A)
+      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A),
+      .GE_P_GB_Q16(GE_P_GB_Q16), .GE_P_BG_Q16(GE_P_BG_Q16),
+      .GE_H_Q16(GE_H_Q16)
   ) u_lane0 (
       .clk, .rst,
       .s_axis_tdata(bcast_tdata_q), .s_axis_tkeep(bcast_tkeep_q),
@@ -112,13 +123,17 @@ module exp_harness_top #(
       .s_axis_tlast(bcast_tlast_q),
       .packets_total(l_packets[0]), .corrupted_total(l_corrupted[0]),
       .detected_total(l_detected[0]), .missed_total(l_missed[0]),
-      .false_total(l_false[0]), .bytes_total(l_bytes[0])
+      .false_total(l_false[0]), .bytes_total(l_bytes[0]),
+      .cycles_total(l_cycles[0]),
+      .corrupted_weights(l_cw[0]), .missed_weights(l_mw[0])
   );
 
   integrity_lane #(
       .DATA_WIDTH(DATA_WIDTH), .ALGO(1), .TAG_WIDTH(16),
       .SUM_WIDTH(16), .ONES_COMPLEMENT(1'b1),
-      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A)
+      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A),
+      .GE_P_GB_Q16(GE_P_GB_Q16), .GE_P_BG_Q16(GE_P_BG_Q16),
+      .GE_H_Q16(GE_H_Q16)
   ) u_lane1 (
       .clk, .rst,
       .s_axis_tdata(bcast_tdata_q), .s_axis_tkeep(bcast_tkeep_q),
@@ -126,13 +141,17 @@ module exp_harness_top #(
       .s_axis_tlast(bcast_tlast_q),
       .packets_total(l_packets[1]), .corrupted_total(l_corrupted[1]),
       .detected_total(l_detected[1]), .missed_total(l_missed[1]),
-      .false_total(l_false[1]), .bytes_total(l_bytes[1])
+      .false_total(l_false[1]), .bytes_total(l_bytes[1]),
+      .cycles_total(l_cycles[1]),
+      .corrupted_weights(l_cw[1]), .missed_weights(l_mw[1])
   );
 
   integrity_lane #(
       .DATA_WIDTH(DATA_WIDTH), .ALGO(2), .TAG_WIDTH(16),
       .BLOCK_WIDTH(8),
-      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A)
+      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A),
+      .GE_P_GB_Q16(GE_P_GB_Q16), .GE_P_BG_Q16(GE_P_BG_Q16),
+      .GE_H_Q16(GE_H_Q16)
   ) u_lane2 (
       .clk, .rst,
       .s_axis_tdata(bcast_tdata_q), .s_axis_tkeep(bcast_tkeep_q),
@@ -140,12 +159,16 @@ module exp_harness_top #(
       .s_axis_tlast(bcast_tlast_q),
       .packets_total(l_packets[2]), .corrupted_total(l_corrupted[2]),
       .detected_total(l_detected[2]), .missed_total(l_missed[2]),
-      .false_total(l_false[2]), .bytes_total(l_bytes[2])
+      .false_total(l_false[2]), .bytes_total(l_bytes[2]),
+      .cycles_total(l_cycles[2]),
+      .corrupted_weights(l_cw[2]), .missed_weights(l_mw[2])
   );
 
   integrity_lane #(
       .DATA_WIDTH(DATA_WIDTH), .ALGO(3), .TAG_WIDTH(32),
-      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A)
+      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A),
+      .GE_P_GB_Q16(GE_P_GB_Q16), .GE_P_BG_Q16(GE_P_BG_Q16),
+      .GE_H_Q16(GE_H_Q16)
   ) u_lane3 (
       .clk, .rst,
       .s_axis_tdata(bcast_tdata_q), .s_axis_tkeep(bcast_tkeep_q),
@@ -153,14 +176,18 @@ module exp_harness_top #(
       .s_axis_tlast(bcast_tlast_q),
       .packets_total(l_packets[3]), .corrupted_total(l_corrupted[3]),
       .detected_total(l_detected[3]), .missed_total(l_missed[3]),
-      .false_total(l_false[3]), .bytes_total(l_bytes[3])
+      .false_total(l_false[3]), .bytes_total(l_bytes[3]),
+      .cycles_total(l_cycles[3]),
+      .corrupted_weights(l_cw[3]), .missed_weights(l_mw[3])
   );
 
   integrity_lane #(
       .DATA_WIDTH(DATA_WIDTH), .ALGO(4), .TAG_WIDTH(32), .CRC_WIDTH(32),
       .CRC_POLY(32'h04C11DB7), .CRC_INIT(32'hFFFFFFFF),
       .CRC_REFIN(1'b1), .CRC_REFOUT(1'b1), .CRC_XOROUT(32'hFFFFFFFF),
-      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A)
+      .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A),
+      .GE_P_GB_Q16(GE_P_GB_Q16), .GE_P_BG_Q16(GE_P_BG_Q16),
+      .GE_H_Q16(GE_H_Q16)
   ) u_lane4 (
       .clk, .rst,
       .s_axis_tdata(bcast_tdata_q), .s_axis_tkeep(bcast_tkeep_q),
@@ -168,13 +195,17 @@ module exp_harness_top #(
       .s_axis_tlast(bcast_tlast_q),
       .packets_total(l_packets[4]), .corrupted_total(l_corrupted[4]),
       .detected_total(l_detected[4]), .missed_total(l_missed[4]),
-      .false_total(l_false[4]), .bytes_total(l_bytes[4])
+      .false_total(l_false[4]), .bytes_total(l_bytes[4]),
+      .cycles_total(l_cycles[4]),
+      .corrupted_weights(l_cw[4]), .missed_weights(l_mw[4])
   );
 
   if (INCLUDE_SHA) begin : g_sha_lane
     integrity_lane #(
         .DATA_WIDTH(DATA_WIDTH), .ALGO(5), .TAG_WIDTH(256),
-        .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A)
+        .MODE(MODE), .BURST_LEN(BURST_LEN), .ERR_SEED(SEED ^ 32'hA5A5_5A5A),
+        .GE_P_GB_Q16(GE_P_GB_Q16), .GE_P_BG_Q16(GE_P_BG_Q16),
+        .GE_H_Q16(GE_H_Q16)
     ) u_lane5 (
         .clk, .rst,
         .s_axis_tdata(bcast_tdata_q), .s_axis_tkeep(bcast_tkeep_q),
@@ -182,7 +213,9 @@ module exp_harness_top #(
         .s_axis_tlast(bcast_tlast_q),
         .packets_total(l_packets[5]), .corrupted_total(l_corrupted[5]),
         .detected_total(l_detected[5]), .missed_total(l_missed[5]),
-        .false_total(l_false[5]), .bytes_total(l_bytes[5])
+        .false_total(l_false[5]), .bytes_total(l_bytes[5]),
+        .cycles_total(l_cycles[5]),
+        .corrupted_weights(l_cw[5]), .missed_weights(l_mw[5])
     );
   end else begin : g_no_sha
     assign l_packets[5]   = 32'd0;
@@ -191,6 +224,9 @@ module exp_harness_top #(
     assign l_missed[5]    = 32'd0;
     assign l_false[5]     = 32'd0;
     assign l_bytes[5]     = 32'd0;
+    assign l_cycles[5]    = 32'd0;
+    assign l_cw[5]        = 32'd0;
+    assign l_mw[5]        = 32'd0;
     assign lane_ready[5]  = 1'b1;
   end
 
@@ -207,6 +243,9 @@ module exp_harness_top #(
     missed_total    = '0;
     false_total     = '0;
     bytes_total     = '0;
+    cycles_total    = '0;
+    corrupted_weights = '0;
+    missed_weights    = '0;
     for (int unsigned i = 0; i < 6; i++) begin
       packets_total[i]   = l_packets[i];
       corrupted_total[i] = l_corrupted[i];
@@ -214,6 +253,9 @@ module exp_harness_top #(
       missed_total[i]    = l_missed[i];
       false_total[i]     = l_false[i];
       bytes_total[i]     = l_bytes[i];
+      cycles_total[i]    = l_cycles[i];
+      corrupted_weights[i] = l_cw[i];
+      missed_weights[i]    = l_mw[i];
     end
   end
 
@@ -228,7 +270,7 @@ module exp_harness_top #(
   ) u_report (
       .clk, .rst, .start(report_start),
       .packets_total, .corrupted_total, .detected_total,
-      .missed_total, .false_total,
+      .missed_total, .false_total, .bytes_total, .cycles_total,
       .uart_txd
   );
 

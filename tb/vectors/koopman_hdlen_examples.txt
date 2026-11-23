@@ -1,0 +1,28 @@
+# Raw output of Philip Koopman's HDLen v2.1 (Carnegie Mellon University).
+# Source: http://users.ece.cmu.edu/~koopman/crc/hdlen.html
+# Software: http://users.ece.cmu.edu/~koopman/crc/hdlen.tar.gz
+# Polynomial values are in Koopman "implicit +1" (reversed reciprocal) notation.
+#
+# Commands used to generate the lines below (HD range kept small so the
+# exhaustive searches finish in seconds):
+#   ./hdlen 0x83 3 4
+#   ./hdlen 0x8810 3 4
+#   ./hdlen 0xc002 3 4
+#   ./hdlen 0x82608edb 5 7
+#   ./hdlen 0x8f6e37a0 5 7
+#
+# Each "# ... Example:" line is a minimum-length codeword demonstrating that
+# the polynomial cannot provide the stated HD at that dataword length.  The
+# bit positions are counted from the first data bit (bit 0, furthest from FCS).
+0x83  HD=3  len=119  Example: Len=120 {0} (0x80) (Bits=2)
+0x83  HD=4  len=119  Example: Len=120 {0} (0x80) (Bits=2)
+0x8810  HD=3  len=32751  Example: Len=32752 {0} (0x8000) (Bits=2)
+0x8810  HD=4  len=32751  Example: Len=32752 {0} (0x8000) (Bits=2)
+0xc002  HD=3  len=32751  Example: Len=32752 {0} (0x8000) (Bits=2)
+0xc002  HD=4  len=32751  Example: Len=32752 {0} (0x8000) (Bits=2)
+0x82608edb  HD=5  len=2974  Example: Len=2975 {0,2215,2866} (0x80000000) (Bits=4)
+0x82608edb  HD=6  len=268  Example: Len=269 {0,89,117,155} (0x80000000) (Bits=5)
+0x82608edb  HD=7  len=171  Example: Len=172 {0,79,85,123} (0x80004000) (Bits=6)
+0x8f6e37a0  HD=5  len=5243  Example: Len=5244 {0,2751,4508} (0x80000000) (Bits=4)
+0x8f6e37a0  HD=6  len=5243  Example: Len=5244 {0,2751,4508} (0x80000000) (Bits=4)
+0x8f6e37a0  HD=7  len=177  Example: Len=178 {0,14,39,54,144} (0x80000000) (Bits=6)

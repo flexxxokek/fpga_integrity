@@ -8,9 +8,9 @@ simulation clock or a gate-equivalent proxy.
 |---|---:|
 | Device | EP4CE115F29C7 (Cyclone IV E, speed grade 7) |
 | Target clock | 12.500 MHz (80.000 ns) = CLOCK_50 / 4 |
-| Fmax (TimeQuest) | 20.08 MHz |
-| Timing closure | met (worst slack +10.602 ns) |
-| Logic elements (ALMs/LEs) | 20,559 / 114,480 |
+| Fmax (TimeQuest) | 20.45 MHz |
+| Timing closure | met (worst slack +10.939 ns) |
+| Logic elements (ALMs/LEs) | 20,586 / 114,480 |
 | Registers | 9,004 |
 | Block memory bits | 0 / 3,981,312 |
 | DSP blocks | — / 266 |

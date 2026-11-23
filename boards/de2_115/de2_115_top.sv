@@ -58,11 +58,11 @@ module de2_115_top (
 
   // 50 MHz / 4 -> 12.5 MHz.  Bit 1 of the counter toggles every 4 input
   // clocks, giving a 50 % duty cycle without an IP PLL.
+  // Free-running divider: clk_std must keep toggling while rst is asserted,
+  // otherwise report_uart's registers never see the reset edge and start_q
+  // stays high, suppressing the next report after KEY[0].
   logic [1:0] div_q;
-  always_ff @(posedge CLOCK_50) begin
-    if (rst) div_q <= 2'd0;
-    else     div_q <= div_q + 2'd1;
-  end
+  always_ff @(posedge CLOCK_50) div_q <= div_q + 2'd1;
   logic clk_std;
   assign clk_std = div_q[1];
 

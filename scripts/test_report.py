@@ -193,10 +193,11 @@ def main(argv: list[str] | None = None) -> int:
         "- RTL line coverage: [docs/coverage.md](coverage.md) (`make cov-report`).",
         "- Yosys synthesis: [docs/results/synthesis.md](results/synthesis.md).",
         "",
-        "## 5. Not covered",
+        "## 5. Outside this report",
         "",
-        "- Board bring-up, vendor P&R, Fmax and real LUT/FF (stage 3–4).",
-        "- Final conclusions from hardware: [docs/results/conclusion.md](results/conclusion.md).",
+        "- Board bring-up, vendor P&R and Fmax: [docs/results/board.md](results/board.md).",
+        "- Static Yosys metrics: [docs/results/synthesis.md](results/synthesis.md).",
+        "- Final comparison and conclusions: [docs/results/conclusion.md](results/conclusion.md).",
         "",
     ]
     out = Path(args.out)

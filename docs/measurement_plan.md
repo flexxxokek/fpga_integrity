@@ -7,8 +7,8 @@
 | Метрика | Источник |
 |---------|----------|
 | gate-equivalent cells / FF | Yosys `synth -noabc`, `make synth` — доступно сейчас |
-| LUT / FF / BRAM / DSP | utilization report вендорной САПР — после этапа 3 |
-| Fmax, WNS | static timing analysis — после этапа 3 |
+| LUT / FF / BRAM / DSP | Fitter utilization report Quartus — [results/board.md](results/board.md) |
+| Fmax, WNS | TimeQuest static timing analysis — [results/board.md](results/board.md) |
 | Латентность (такты) | RTL + подтверждение тестом `test_wrapper.latency` |
 
 Результаты Yosys — gate-equivalent прокси, не вендорные LUT: `make synth`
@@ -33,7 +33,9 @@
 - Sweep по `DATA_WIDTH ∈ {8, 32, 64}`.
 - Сборка стенда целиком — отдельная строка в результатах.
 - Кристалл, САПР и целевая частота фиксируются в [board.md](board.md).
-  Результаты до получения платы помечаются как предварительные.
+  Yosys-метрики — прокси (gate-equivalent), вендорные статические метрики
+  приведены в [results/board.md](results/board.md); динамические данные с платы
+  публикуются отдельно по мере прогона кампаний.
 
 ## 3. Кампании на плате
 

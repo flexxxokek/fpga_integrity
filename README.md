@@ -10,9 +10,11 @@
 **Статус:** ядра и обёртки реализованы, регрессия cocotb (core / wrapper /
 harness) проходит с оракулом против эталонных моделей; статические метрики
 сняты синтезом Yosys ([docs/results/synthesis.md](docs/results/synthesis.md)).
-Плата и синтез в вендорной САПР пока недоступны — поэтому Fmax и LUT/FF
-вендорного P&R в отчёте отсутствуют. Аппаратно-зависимые решения фиксируются
-в [docs/board.md](docs/board.md).
+Плата Terasic DE2-115 получена, собрана в Quartus и прошита: вендорные
+Fmax / LE / FF приведены в [docs/results/board.md](docs/results/board.md).
+Характеристики платы и чеклист bring-up — в [docs/board.md](docs/board.md);
+кампании `MODE=0..9` на плате выполнены и совпали с симуляцией
+([docs/results/board_campaigns.md](docs/results/board_campaigns.md)).
 
 ---
 
@@ -76,7 +78,7 @@ fpga-integrity-module/
 │   ├── cores/            # parity, checksum, fletcher, adler, crc (generic), sha256
 │   ├── wrappers/         # единые TX/RX-обёртки алгоритмов
 │   └── harness/          # стимулы, инжектор, счётчики, контроллер, UART
-├── boards/               # board-зависимые обёртки и constraints (после получения платы)
+├── boards/               # board-зависимые топы, constraints и interactive demo (DE2-115)
 ├── tb/                   # cocotb: модели, directed/random/error-тесты
 ├── scripts/              # synth.py, collect.py, analyze.py, parse_reports.py, cov_report.py
 ├── syn/                  # Yosys-скрипты и отчёты синтеза (syn/reports/)
@@ -92,8 +94,9 @@ fpga-integrity-module/
   эталонные модели на Python; внешний `cocotbext-axi` не используется.
 - **Синтез:** Yosys (в т.ч. WASM-сборка `yowasp-yosys`) даёт gate-equivalent
   метрики и число триггеров, [docs/results/synthesis.md](docs/results/synthesis.md).
-- **САПР и кристалл:** определяются после получения платы ([docs/board.md](docs/board.md));
-  Fmax и вендорные LUT/FF появятся только после P&R.
+- **САПР и кристалл:** Quartus Prime Lite 21.1, Cyclone IV E EP4CE115F29C7
+  ([docs/board.md](docs/board.md)); Fmax и утилизация после P&R — в
+  [docs/results/board.md](docs/results/board.md).
 
 ## Быстрый старт
 
@@ -113,6 +116,7 @@ make harness    # только симуляция стенда
 make sim-measure         # DATA_WIDTH=32 по умолчанию
 make sim-measure-all     # DATA_WIDTH=8 и 32, один сводный отчёт
 make sim-false-rate      # научные генераторы искажений: false/undetected rate
+make sim-tag-rate        # искажение тега: проверка RX (data/sim_tag.csv)
 make synth              # синтез Yosys: таблица аппаратных затрат
 make cov-report         # суммарный отчёт по покрытию RTL
 
@@ -152,17 +156,19 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 
 - [x] **Этап 1.** Реализация алгоритмов (RTL-ядра + единые обёртки)
 - [x] **Этап 2.** Верификация (unit → random → error-кампании → покрытие):
-  94 конфигурации, 249/249 тестов, покрытие RTL 95.45 %; фактические числа —
-  [docs/coverage.md](docs/coverage.md) и [docs/test_report.md](docs/test_report.md)
+  114 конфигураций, 270/270 тестов, покрытие RTL 95.58 % (1277/1336 строк);
+  фактические числа — [docs/coverage.md](docs/coverage.md) и
+  [docs/test_report.md](docs/test_report.md)
 - [x] **Этап 3.** Получение платы, фиксация характеристик: Terasic DE2-115,
   Cyclone IV E EP4CE115F29C7, стенд 12.5 МГц ([docs/board.md](docs/board.md))
-- [~] **Этап 4.** Board-пакет (`boards/de2_115/`) и цели `make board-build` /
-  `board-program` готовы; прошивка и кампании на плате ожидают подключения JTAG
-- [~] **Этап 5.** Анализ: синтез и симуляционные сравнения готовы
-  ([docs/results/conclusion.md](docs/results/conclusion.md)); данные с платы
-  и вендорные метрики ожидаются
+- [x] **Этап 4.** Board-пакет (`boards/de2_115/`), прошивка через JTAG и UART-отчёт
+  готовы; все кампании `MODE=0..9` на плате совпали с симуляцией
+  ([docs/results/board_campaigns.md](docs/results/board_campaigns.md))
+- [x] **Этап 5.** Анализ: синтез, симуляционные и вендорные метрики, данные
+  кампаний с платы готовы ([docs/results/conclusion.md](docs/results/conclusion.md),
+  [docs/results/board_campaigns.md](docs/results/board_campaigns.md))
 
-Этапы 1–2 и разработка стенда в симуляции ведутся параллельно, не дожидаясь плату.
+Этапы 1–2 и разработка стенда в симуляции велись параллельно, не дожидаясь плату.
 Критерии входа/выхода этапов: [docs/roadmap.md](docs/roadmap.md).
 
 ## Команда
@@ -182,10 +188,13 @@ python tb/run_tests.py --mode core|wrapper|harness|all --widths 8,32,64 [--quick
 | [docs/interactive_demo.md](docs/interactive_demo.md) | Интерактивная демонстрация хешей: пакет с ПК → FPGA → сравнение с Python |
 | [docs/roadmap.md](docs/roadmap.md) | Этапы работ, зависимости, критерии |
 | [docs/results/synthesis.md](docs/results/synthesis.md) | Статические метрики из Yosys (gate-equivalent, FF) |
+| [docs/results/board.md](docs/results/board.md) | Вендорные метрики Quartus (Fmax, LE/FF) |
+| [docs/results/board_campaigns.md](docs/results/board_campaigns.md) | Кампании на плате: sim ↔ board и тайминг по режимам |
 | [docs/results/conclusion.md](docs/results/conclusion.md) | Итоговое сравнение и выводы |
+| [docs/results/work_conclusions.md](docs/results/work_conclusions.md) | Итоговая оценка работы: статус, выводы и открытые вопросы |
 | [docs/coverage.md](docs/coverage.md) | Фактическое покрытие RTL (слияние всех конфигураций) |
 | [boards/README.md](boards/README.md) | План вендорного слоя и bring-up |
-| [docs/board.md](docs/board.md) | Шаблон фиксации характеристик платы (заполняется при получении) |
+| [docs/board.md](docs/board.md) | Характеристики DE2-115 и чеклист bring-up (заполнен) |
 | [docs/decisions.md](docs/decisions.md) | Журнал принятых решений |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Workflow команды, стиль кода, правила ревью |
 

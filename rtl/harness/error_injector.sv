@@ -94,7 +94,10 @@ module error_injector #(
     if (MODE == 0) begin : g_rank_none
       assign rank_v = 32'd0;
     end else begin : g_rank_random
-      assign rank_v = (valid_bits != 32'd0) ? (rng_q % valid_bits) : 32'd0;
+      // valid_bits is 8/16/32/64 (a power of two), so modulo is exactly a
+      // bitmask.  Quartus inferred a wide divider here, which broke timing
+      // in every mode that selects a bit to corrupt.
+      assign rank_v = (valid_bits != 32'd0) ? (rng_q & (valid_bits - 32'd1)) : 32'd0;
     end
   endgenerate
 
@@ -123,6 +126,10 @@ module error_injector #(
 
   always_comb begin
     mix_b = 8'd0;
+    // Quartus rejects implicit latches in always_comb.  These two are only
+    // used by MODE=5, but every branch must assign them unconditionally.
+    ge_rng = 16'd0;
+    ge_state = ge_state_q;
     beat_has_bytes = (s_axis_tkeep != '0);
     // Mode 5 is a channel model: it must consume every payload beat, not
     // just the first one, otherwise the tested codeword is only one beat.
@@ -139,7 +146,6 @@ module error_injector #(
       // Gilbert-Elliott channel: walk every valid bit of the current beat,
       // keeping the Markov state across beats and packets.
       // 0 = good (gap), 1 = bad (burst).
-      ge_state = ge_state_q;
       for (int unsigned i = 0; i < DATA_WIDTH; i++) begin
         if (i < valid_bits) begin
           // Draw a fresh value per bit from the packet seed and index, so the

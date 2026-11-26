@@ -2,7 +2,7 @@
 
 Merged from **114** build directories by `make cov-report`.
 
-**Total: 1276/1335 executable lines = 95.58%**
+**Total: 1277/1336 executable lines = 95.58%**
 
 | Source file | Lines covered | Total | Coverage |
 |---|---:|---:|---:|
@@ -12,7 +12,7 @@ Merged from **114** build directories by `make cov-report`.
 | fletcher_core.sv | 71 | 72 | 98.61% |
 | parity_core.sv | 30 | 31 | 96.77% |
 | sha256_core.sv | 286 | 286 | 100.00% |
-| error_injector.sv | 128 | 128 | 100.00% |
+| error_injector.sv | 129 | 129 | 100.00% |
 | exp_harness_top.sv | 85 | 87 | 97.70% |
 | integrity_lane.sv | 123 | 125 | 98.40% |
 | report_uart.sv | 76 | 121 | 62.81% |

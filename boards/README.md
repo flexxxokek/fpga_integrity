@@ -29,8 +29,9 @@ make board-capture PORT=/dev/ttyUSB0  # приём RESULT/DONE + сверка с
 Повторно отчёт можно вызвать нажатием KEY[0] (короткий reset-импульс по фронту).
 Скрипт сравнивает все 6 lane с `data/sim_clean_w32.csv`.
 
-Стенд работает на 12.5 МГц (`CLOCK_50 / 4`): Fmax полного стенда 19.84 МГц,
-поэтому прямая работа на 50 МГц не закрывает тайминг.
+Стенд работает на 12.5 МГц (`CLOCK_50 / 4`): Fmax полного стенда 20.45 МГц
+(TimeQuest, worst slack +10.939 нс), поэтому прямая работа на 50 МГц не
+закрывает тайминг.
 
 `make board-build` использует `QUARTUS_SH` (по умолчанию
 `/opt/intelFPGA/21.1/quartus/bin/quartus_sh`). Параметры кампании
@@ -46,5 +47,7 @@ make board-capture PORT=/dev/ttyUSB0  # приём RESULT/DONE + сверка с
 3. Прогон `MODE=0` на 64 пакетах; побайтовая сверка с референсом из симуляции.
 4. Только после этого — кампании `MODE=1..9`.
 
-До прошивки все метрики в `docs/results/` являются симуляционными
-(Yosys gate-equivalent) или вендорными статическими из Quartus — но не данными с платы.
+Метрики в `docs/results/` — симуляционные (Yosys gate-equivalent) или вендорные
+статические из Quartus. Данные со всех кампаний на плате (`MODE=0..9`) —
+`data/board_*_2026-11-25.log`; сравнение с симуляцией и тайминг по режимам —
+[docs/results/board_campaigns.md](../docs/results/board_campaigns.md).

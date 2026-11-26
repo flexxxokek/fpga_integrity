@@ -6,7 +6,6 @@ Input CSV files are produced by ``scripts/collect.py`` and use the long format:
     timestamp,board,git,seed,campaign,algo,metric,value
 
 Outputs:
-    <out>/summary.csv   machine-readable aggregate
     <out>/summary.md    Markdown table for docs
 
 Alongside detection rates, the summary derives speed metrics from the `bytes`
@@ -197,25 +196,6 @@ def metric_columns(summary: dict[tuple[str, str], dict[str, float]]) -> list[str
     return ordered
 
 
-def write_csv(
-    path: Path,
-    summary: dict[tuple[str, str], dict[str, float]],
-    columns: list[str],
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(["algo", "campaign", *columns])
-        for (algo, campaign), entry in sorted(summary.items()):
-            writer.writerow(
-                [
-                    algo,
-                    campaign,
-                    *[f"{entry.get(column, ''):.6g}" if entry.get(column) is not None else "" for column in columns],
-                ]
-            )
-
-
 def write_markdown(
     path: Path,
     summary: dict[tuple[str, str], dict[str, float]],
@@ -308,9 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     summary = aggregate(rows)
     columns = metric_columns(summary)
     out_dir = Path(args.out)
-    write_csv(out_dir / "summary.csv", summary, columns)
     write_markdown(out_dir / "summary.md", summary, columns)
-    print(f"wrote {out_dir / 'summary.csv'}")
     print(f"wrote {out_dir / 'summary.md'}")
     if not args.no_plot:
         write_plots(out_dir, summary, columns)

@@ -60,24 +60,27 @@ REFIN/REFOUT входные байты и итоговый остаток пер
 | `error_injector` | режимы: clean, single-bit, burst (длина L), byte-swap, zero-insert; вставляется после TX каждого lane и искажает только payload, поэтому тег считается по чистым данным, а искажение одинаково для всех lanes |
 | `lane[N]` | TX → error_injector → RX одного алгоритма + счётчики (см. measurement_plan) |
 | `experiment_ctrl` | FSM: приём команды, запуск кампании, сбор счётчиков, выдача отчёта |
-| `uart_tx/rx` | обмен с хостом; параметры по умолчанию 115200 8N1, финально — после платы |
+| `uart_tx/rx` | обмен с хостом; 115200 8N1, подтверждено на DE2-115 |
 
 Топ стенда `exp_harness_top` имеет board-независимые порты:
 `clk`, `rst`, `uart_txd`, `uart_rxd`, опционально `leds` для bring-up.
 
 ## 5. Board-абстракция (`boards/`)
 
-До получения платы каталог пуст (кроме шаблона). После получения:
+Для DE2-115 каталог заполнен:
 
 ```
-boards/<board_name>/
-├── board_top.sv      # инстанс exp_harness_top + клоки/сброс/пины
-├── constraints.*     # xdc / sdc / pcf — зависит от САПР
-└── README.md         # pinout, клоки, особенности (заполняется из docs/board.md)
+boards/de2_115/
+├── de2_115.qpf / .qsf / .sdc  # проект Quartus, пины, 50 МГц → 12.5 МГц
+├── de2_115_top.sv             # инстанс exp_harness_top + POR/клок/HEX/LED
+└── output_files/              # .sof и отчёты (игнорируются git)
 ```
 
-Выбор САПР, кристалла и целевой частоты фиксируется в [board.md](board.md)
-и журнале решений. До этого момента synthesis-flow не фиксируется.
+Отдельная прошивка [`boards/de2_115_interactive/`](../boards/de2_115_interactive/)
+использует тот же UART-протокол для интерактивной демонстрации хешей.
+
+Выбор САПР, кристалла и целевой частоты зафиксирован в [board.md](board.md)
+и [decisions.md](decisions.md) (D-11).
 
 ## 6. Хост-часть (`scripts/`)
 

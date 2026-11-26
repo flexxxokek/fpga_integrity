@@ -21,11 +21,14 @@
 
 | Кнопка сброса (пин, полярность) | `KEY[0]` = PIN_M23, активный **низкий**; в RTL инвертируется |
 
-Прямая работа на 50 МГц невозможна: TimeQuest даёт Fmax 19.84 МГц на slow
+Прямая работа на 50 МГц невозможна: TimeQuest даёт Fmax 20.45 МГц на slow
 85C-модели для полного стенда (6 lane + SHA-256 + UART). Делитель на 4 даёт
-запас по таймингу (worst slack +19.14 нс) без перепроектирования критического
+запас по таймингу (worst slack +10.939 нс) без перепроектирования критического
 пути. Fmax и утилизация из Quartus — в
-[docs/results/board.md](results/board.md).
+[docs/results/board.md](results/board.md) (20 586 LE, 9 004 регистра). Это
+значения **clean-прошивки**; остальные режимы дают Fmax 14.32–19.95 МГц и
+тоже закрывают тайминг на 12.5 МГц — см.
+[results/board_campaigns.md](results/board_campaigns.md).
 
 ## 3. Интерфейс с хостом
 
@@ -74,17 +77,19 @@ lane, у которых `missed == 0`, LEDG[8] дублирует `done`. Кра
 
 - [x] Плата получена и идентифицирована
 - [x] Исходники и pin assignments подготовлены (`boards/de2_115/`)
-- [x] Проект собирается в Quartus, timing met (Fmax 19.84 МГц, slack +19.14 нс)
+- [x] Проект собирается в Quartus, timing met (Fmax 20.45 МГц, slack +10.939 нс)
 - [x] `.sof` прошит через JTAG 2026-11-23, `EP4CE115F29`, checksum `0x012942A1`
 - [ ] Мигание LED (heartbeat `LEDR[0]`) после прошивки
 - [x] UART: получены 6 строк `RESULT,...` и `DONE` (115200 8N1)
 - [x] Стенд: кампания `clean` на 64 пакета, все 6 lane совпали с
   `data/sim_clean_w32.csv` (`data/board_clean_w32.log`); cycles `0x540` для
   пяти лёгких lane и `0x2840` для SHA-256
-- [ ] Полная кампания; результаты совпадают с референсом из симуляции
+- [x] Полные кампании `MODE=0..9` (2026-11-25): все 60 lane-отчётов совпали с
+  симуляцией, [results/board_campaigns.md](results/board_campaigns.md)
 
 ## 7. Решения, принятые на основе платы
 
 Зафиксировано в [decisions.md](decisions.md), D-11: кристалл EP4CE115F29C7,
-САПР Quartus Prime Lite 21.1, целевая частота 50 МГц без PLL, UART 115200.
+САПР Quartus Prime Lite 21.1, целевая частота стенда 12.5 МГц = CLOCK_50/4
+без PLL, UART 115200.
 Пины взяты из официальных таблиц DE2-115 (User Manual, Table 4-x).

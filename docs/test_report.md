@@ -15,17 +15,17 @@ regression results (the per-configuration `results.xml` files under `sim_build/r
 
 | Metric | Value |
 |---|---:|
-| Build/test configurations | 116 |
-| cocotb tests | 272 |
-| Passed | 272 |
+| Build/test configurations | 114 |
+| cocotb tests | 270 |
+| Passed | 270 |
 | Failed | 0 |
 | Skipped | 0 |
-| Aggregate test sim time | 415,575,200 ns |
-| Aggregate test CPU time | 831.56 s |
+| Aggregate test sim time | 415,028,160 ns |
+| Aggregate test CPU time | 781.23 s |
 
 ### Configuration matrix
 
-- Levels: core (39), harness (38), wrapper (39).
+- Levels: core (39), harness (36), wrapper (39).
 - Algorithm configurations: 13 (adler32, checksum16_ones, checksum8_wrap, crc_crc16_arc, crc_crc16_ccitt_false, crc_crc32, crc_crc32c, crc_crc8, fletcher16, fletcher32, parity_even, parity_odd, sha256).
 - Data widths: 32, 64, 8.
 
@@ -51,7 +51,8 @@ regression results (the per-configuration `results.xml` files under `sim_build/r
 - RTL line coverage: [docs/coverage.md](coverage.md) (`make cov-report`).
 - Yosys synthesis: [docs/results/synthesis.md](results/synthesis.md).
 
-## 5. Not covered
+## 5. Outside this report
 
-- Board bring-up, vendor P&R, Fmax and real LUT/FF (stage 3–4).
-- Final conclusions from hardware: [docs/results/conclusion.md](results/conclusion.md).
+- Board bring-up, vendor P&R and Fmax: [docs/results/board.md](results/board.md).
+- Static Yosys metrics: [docs/results/synthesis.md](results/synthesis.md).
+- Final comparison and conclusions: [docs/results/conclusion.md](results/conclusion.md).

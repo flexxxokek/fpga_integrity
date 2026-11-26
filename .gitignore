@@ -51,6 +51,8 @@ output_files/
 # Данные и артефакты
 data/*.tmp
 docs/results/*.png.tmp
+# Логи приёма с платы — первичные доказательства кампаний, хранятся в git
+!data/board_*.log
 
 # ОС / редакторы
 .DS_Store
